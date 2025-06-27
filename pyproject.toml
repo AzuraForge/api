@@ -1,0 +1,23 @@
+# ========== DOSYA: api/pyproject.toml ==========
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "azuraforge-api"
+version = "0.1.0"
+description = "The API server for the AzuraForge Platform."
+dependencies = [
+    # Çekirdek kütüphanemizi GitHub'dan çekiyoruz
+    "azuraforge-core @ git+https://github.com/AzuraForge/core.git",
+    "fastapi", "uvicorn[standard]", "python-dotenv",
+    "celery[redis]", "pyyaml"
+]
+
+[project.scripts]
+start-api = "azuraforge.api.main:run_server"
+start-worker = "azuraforge.api.main:run_celery_worker"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["azuraforge.api"]
