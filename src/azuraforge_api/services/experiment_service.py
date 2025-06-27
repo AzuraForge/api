@@ -1,24 +1,20 @@
-# ========== DOSYA: src/azuraforge_api/services/experiment_service.py ==========
+# ========== GÜNCELLENECEK DOSYA: api/src/azuraforge_api/services/experiment_service.py ==========
 from typing import List, Dict, Any
+import numpy as np
 
-# Bu import, 'azuraforge-learner' paketi kurulduktan sonra çalışacaktır.
-# from azuraforge_learner import Learner 
+# Artık doğrudan worker paketinden gerçek görevi import ediyoruz!
+from azuraforge_worker.tasks.training_tasks import start_training_pipeline
 
 def list_experiments() -> List[Dict[str, Any]]:
-    """Tüm deneylerin bir listesini döndürür (şimdilik sahte veri)."""
-    print("Service: `list_experiments` called.")
-    return [
-        {"id": "exp_123", "name": "stock_predictor_run_1", "status": "completed"},
-        {"id": "exp_456", "name": "weather_forecaster_run_1", "status": "running"},
-    ]
+    # ... (bu fonksiyon aynı kalabilir)
+    return [{"id": "exp_123", "name": "dummy_experiment", "status": "completed"}]
 
 def start_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
-    """Yeni bir deneyi başlatır ve bir görev ID'si döndürür (şimdilik sahte)."""
-    pipeline_name = config.get("pipeline_name", "unknown_pipeline")
-    print(f"Service: `start_experiment` called for pipeline: {pipeline_name}")
-    # Gerçekte burada bir Celery görevi tetiklenecek
-    task_id = f"task_{np.random.randint(1000, 9999)}"
-    return {"message": "Experiment submitted to worker.", "task_id": task_id}
-
-# Bu import'u fonksiyonun içine koyarak, celery worker olmadan da test etmemizi kolaylaştırırız.
-import numpy as np 
+    """Yeni bir deneyi başlatır ve bir görev ID'si döndürür."""
+    pipeline_name = config.get("pipeline_name", "unknown")
+    print(f"Service: Sending task for pipeline '{pipeline_name}' to Celery.")
+    
+    # .delay() ile gerçek Celery görevini tetikliyoruz
+    task = start_training_pipeline.delay(config)
+    
+    return {"message": "Experiment submitted to worker.", "task_id": task.id}
