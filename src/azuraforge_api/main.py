@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .core.config import settings
-from .routes import experiments, pipelines
+from .routes import experiments, pipelines, streaming 
 
 def create_app() -> FastAPI:
     app = FastAPI(title=settings.PROJECT_NAME, version="0.1.0")
@@ -20,6 +20,8 @@ def create_app() -> FastAPI:
     # Her router'ı kendi mantıksal yoluyla kaydet
     app.include_router(experiments.router, prefix=settings.API_V1_PREFIX)
     app.include_router(pipelines.router, prefix=settings.API_V1_PREFIX)
+    # YENİ: WebSocket rotasını ekle
+    app.include_router(streaming.router)
 
     @app.get("/", tags=["Root"])
     def read_root():
