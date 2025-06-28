@@ -1,27 +1,39 @@
-# ========== DOSYA: src/azuraforge_api/routes/experiments.py ==========
+# ========== GÜNCELLENECEK DOSYA: api/src/azuraforge_api/routes/experiments.py ==========
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any
-from azuraforge_api.services import experiment_service # Mutlak import
+
+# Servis katmanından ilgili fonksiyonları import et
+from ..services import experiment_service
 
 router = APIRouter()
 
-@router.get("/pipelines")
-def get_pipelines():
-    """Platform için mevcut resmi uygulamaları listeler."""
-    return experiment_service.get_available_pipelines()
-    
-@router.get("/experiments", response_model=List[Dict[str, Any]])
+@router.get("/", response_model=List[Dict[str, Any]])
 def get_all_experiments():
-    """Tüm deneylerin listesini almak için endpoint."""
+    """
+    Başlatılmış tüm deneylerin (çalışan veya tamamlanmış) bir listesini döndürür.
+    """
     try:
         return experiment_service.list_experiments()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/experiments", status_code=202, response_model=Dict[str, Any])
-def create_experiment(config: Dict[str, Any]):
-    """Yeni bir deney başlatmak için endpoint."""
+@router.post("/", status_code=202, response_model=Dict[str, Any])
+def create_new_experiment(config: Dict[str, Any]):
+    """
+    Verilen konfigürasyon ile yeni bir deneyi arka planda çalışması için Worker'a gönderir.
+    """
     try:
         return experiment_service.start_experiment(config)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/{task_id}/status", response_model=Dict[str, Any])
+def get_experiment_status(task_id: str):
+    """
+    Belirli bir görevin (deneyin) anlık durumunu döndürür.
+    Dashboard tarafından canlı takip için kullanılır.
+    """
+    try:
+        return experiment_service.get_task_status(task_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
