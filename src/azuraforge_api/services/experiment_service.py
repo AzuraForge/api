@@ -6,23 +6,13 @@ from importlib import resources
 from typing import List, Dict, Any, Optional
 from celery.result import AsyncResult 
 
-# --- KRİTİK DÜZELTME: Worker'dan gerçek görevi import et ---
-# Bu import, 'azuraforge-worker' paketini gerektirir.
-from azuraforge_worker.tasks.training_tasks import start_training_pipeline
-
-# Worker projesinden Celery uygulamasını import et
 from azuraforge_worker import celery_app
+from azuraforge_worker.tasks.training_tasks import start_training_pipeline # Görevi import et
 
-# Rapor Dizini
 REPORTS_BASE_DIR = os.path.abspath(os.getenv("REPORTS_DIR", "/app/reports"))
 
 def get_available_pipelines() -> List[Dict[str, Any]]:
-    """
-    'azuraforge-applications' paketinden resmi uygulama listesini okur.
-    Dashboard'un "Yeni Deney Başlat" formundaki seçenekleri doldurmak için kullanılır.
-    """
     try:
-        # 'azuraforge_applications' paketi içindeki 'official_apps.json' dosyasını oku
         with resources.open_text("azuraforge_applications", "official_apps.json") as f:
             return json.load(f)
     except (FileNotFoundError, ModuleNotFoundError) as e:
@@ -30,10 +20,6 @@ def get_available_pipelines() -> List[Dict[str, Any]]:
         return []
 
 def list_experiments() -> List[Dict[str, Any]]:
-    """
-    Diskteki tüm 'results.json' dosyalarını tarayarak deneyleri listeler.
-    Dashboard'daki "Deney Listesi" sekmesini doldurur.
-    """
     experiment_files = glob.glob(f"{REPORTS_BASE_DIR}/**/results.json", recursive=True)
     experiments = []
     for f_path in experiment_files:
@@ -54,17 +40,18 @@ def list_experiments() -> List[Dict[str, Any]]:
     return experiments
 
 def start_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
-    """Yeni bir deneyi Celery görevi olarak başlatır."""
     pipeline_name = config.get("pipeline_name", "unknown")
     print(f"Service: Sending task for pipeline '{pipeline_name}' to Celery.")
-    # start_training_pipeline görevi Celery'ye gönderilir.
-    # config'e sadece pipeline_name ekliyoruz, diğer config bilgileri worker'da varsayılan olarak alınacak.
     task = start_training_pipeline.delay(config) 
     return {"message": "Experiment submitted to worker.", "task_id": task.id}
 
 def get_task_status(task_id: str) -> Dict[str, Any]:
-    """Belirli bir Celery görevinin anlık durumunu döndürür."""
     task_result = AsyncResult(task_id, app=celery_app)
     status = task_result.state
-    result = task_result.result if task_result.ready() else task_result.info 
-    return {"task_id": task_id, "status": status, "result": result}
+    
+    # --- KRİTİK DÜZELTME: Exception objesini string'e çevir ---
+    details = task_result.info 
+    if isinstance(details, Exception): # Eğer gelen bir hata objesiyse
+        details = str(details) # Onu string'e çevirerek JSON serileştirme hatasını önle
+    
+    return {"task_id": task_id, "status": status, "result": details}

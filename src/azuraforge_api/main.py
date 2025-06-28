@@ -15,13 +15,13 @@ def create_app() -> FastAPI:
         allow_methods=["*"], allow_headers=["*"],
     )
 
-    # Her router'ı kendi mantıksal yoluyla kaydet
-    # !!!!!!! DÜZELTME BURADA: prefix=settings.API_V1_PREFIX parametresini KALDIRDIK.
-    # Bu prefix'i artık her router kendi içinde yönetecek.
-    app.include_router(experiments.router, prefix=settings.API_V1_PREFIX) 
+    # --- KRİTİK DÜZELTME: Prefix'i geri ekliyoruz ---
+    # Router'lar kendi içlerinde '/experiments' ve '/pipelines' prefix'lerini zaten içeriyor.
+    # Burada /api/v1'i ekleyerek, '/api/v1/experiments' ve '/api/v1/pipelines' elde edeceğiz.
+    app.include_router(experiments.router, prefix=settings.API_V1_PREFIX)
     app.include_router(pipelines.router, prefix=settings.API_V1_PREFIX)
-    app.include_router(streaming.router) # WebSocket router'ının prefix'i yok
-
+    app.include_router(streaming.router) # WebSocket'in ayrı bir prefix'i olmamalı
+    
     @app.get("/", tags=["Root"])
     def read_root():
         return {"message": f"Welcome to {settings.PROJECT_NAME}"}
