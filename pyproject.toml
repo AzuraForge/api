@@ -9,9 +9,13 @@ version = "0.1.0"
 description = "The API server for the AzuraForge Platform."
 requires-python = ">=3.8"
 dependencies = [
-    "azuraforge-learner @ git+https://github.com/AzuraForge/learner.git@main",
+    # API'nin, hangi uygulamaların "resmi" olduğunu bilmesi için
+    # katalog reposuna bağımlılığı ekliyoruz.
     "azuraforge-applications @ git+https://github.com/AzuraForge/applications.git@main",
+
+    # API'nin görev gönderebilmesi için worker'a da ihtiyacı var.
     "azuraforge-worker @ git+https://github.com/AzuraForge/worker.git@main",
+
     "fastapi",
     "uvicorn[standard]",
     "python-dotenv",
