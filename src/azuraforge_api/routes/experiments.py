@@ -5,13 +5,10 @@ from azuraforge_api.services import experiment_service # Mutlak import
 
 router = APIRouter()
 
-# YENİ ENDPOINT
 @router.get("/pipelines")
 def get_pipelines():
-    """Platforma kurulu ve keşfedilmiş tüm pipeline'ları listeler."""
-    # Sadece konfigürasyonları ve isimleri döndür, sınıfları değil.
-    all_pipelines = experiment_service.get_available_pipelines()
-    return {name: data["default_config"] for name, data in all_pipelines.items()}
+    """Platform için mevcut resmi uygulamaları listeler."""
+    return experiment_service.get_available_pipelines()
     
 @router.get("/experiments", response_model=List[Dict[str, Any]])
 def get_all_experiments():
