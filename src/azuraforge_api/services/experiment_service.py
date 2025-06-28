@@ -14,7 +14,7 @@ from azuraforge_worker.tasks.training_tasks import start_training_pipeline
 from azuraforge_worker import celery_app
 
 # Rapor Dizini
-REPORTS_BASE_DIR = os.path.abspath(os.getenv("REPORTS_DIR", "/app/reports"))
+REPORTS_BASE_DIR = os.path.abspath(os.getenv("REPORTS_DIR", "reports"))
 
 def get_available_pipelines() -> List[Dict[str, Any]]:
     """
