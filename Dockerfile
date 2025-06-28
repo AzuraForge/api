@@ -1,20 +1,16 @@
-# ========== DOSYA: api/Dockerfile ==========
+# ========== GÜNCELLENECEK DOSYA: api/Dockerfile ==========
 FROM python:3.10-slim-bullseye
 
-# Konteyner içinde uygulama kodu için bir çalışma dizini belirle
+RUN apt-get update && apt-get install -y git --no-install-recommends && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-# pyproject.toml ve setup.py'ı kopyala (bağımlılıkları kurmak için)
 COPY pyproject.toml .
 COPY setup.py .
+# --- KRİTİK DÜZELTME: src klasörünü pip install'dan ÖNCE kopyala ---
+COPY src ./src 
 
-# Bağımlılıkları kur. Bu komut, smart-learner, learner, applications ve worker'ı da Gitten çekecek.
-# "--no-cache-dir" ile pip cache'ini kullanma, her zaman güncel indir.
+# API'nin tüm bağımlılıklarını kur
 RUN pip install --no-cache-dir .
 
-# Uygulamanın kalan kodunu kopyala
-COPY src ./src
-
-# Konteyner başlatıldığında çalışacak varsayılan komut
-# Bu, docker-compose.yml'da ezilir.
 CMD ["start-api"]
