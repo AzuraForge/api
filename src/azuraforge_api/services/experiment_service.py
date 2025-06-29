@@ -1,14 +1,14 @@
 import json
 import os
 import glob
-from importlib import resources # applications.official_apps.json için
-from importlib.metadata import entry_points # Konfigürasyonları keşfetmek için
+from importlib import resources
+from importlib.metadata import entry_points
 from typing import List, Dict, Any, Optional
 from celery.result import AsyncResult 
 
 from azuraforge_worker import celery_app
-from azuraforge_worker.tasks.training_tasks import start_training_pipeline # Görevi import et
-from azuraforge_worker.tasks.training_tasks import AVAILABLE_PIPELINES_AND_CONFIGS # Yeni: Worker'dan keşfedilenleri al
+from azuraforge_worker.tasks.training_tasks import start_training_pipeline
+from azuraforge_worker.tasks.training_tasks import AVAILABLE_PIPELINES_AND_CONFIGS
 
 REPORTS_BASE_DIR = os.path.abspath(os.getenv("REPORTS_DIR", "/app/reports"))
 
@@ -49,38 +49,52 @@ def get_default_pipeline_config(pipeline_id: str) -> Dict[str, Any]:
 
 
 def list_experiments() -> List[Dict[str, Any]]:
-    # ... (Aynı kalacak) ...
+    """
+    DÜZELTME: Artık her deney için results.json dosyasının tamamını döndürüyor.
+    Bu, UI'ın genişletilebilir satırlarda tüm detayları göstermesini sağlar.
+    """
     experiment_files = glob.glob(f"{REPORTS_BASE_DIR}/**/results.json", recursive=True)
     experiments = []
     for f_path in experiment_files:
         try:
             with open(f_path, 'r') as f:
                 data = json.load(f)
-                experiments.append({
-                    "id": data.get("experiment_id", os.path.basename(os.path.dirname(f_path))),
-                    "status": data.get("status", "UNKNOWN"),
-                    "pipeline_name": data.get("config", {}).get("pipeline_name", "N/A"),
-                    "ticker": data.get("config", {}).get("data_sourcing", {}).get("ticker", "N/A"),
-                    "final_loss": data.get("results", {}).get("final_loss"),
-                    "completed_at": data.get("completed_at"), # Yeni eklendi
-                    "started_at": data.get("config", {}).get("start_time"), # Eğer config'de varsa
-                    "results": data.get("results") # Yeni: Detay sayfasında grafik için sonuçları da al
-                })
+                # Direkt olarak dosyanın içeriğini listeye ekle
+                experiments.append(data)
         except Exception as e:
             print(f"Warning: Could not read results.json from {f_path}: {e}")
             continue
-    experiments.sort(key=lambda x: x.get('id', ''), reverse=True)
+    
+    # Sıralama: Önce çalışanlar, sonra en yeni tamamlananlar
+    def sort_key(exp):
+        status_order = {'STARTED': 1, 'PROGRESS': 2, 'PENDING': 3, 'UNKNOWN': 4, 'DISCONNECTED': 5, 'FAILURE': 6, 'ERROR': 7, 'SUCCESS': 8}
+        status = exp.get('status', 'UNKNOWN')
+        # Eğer canlı bir görevse, Celery'den anlık durumunu al. Bu, PENDING'den STARTED'a geçişi yakalar.
+        if status in ['STARTED', 'PROGRESS', 'PENDING']:
+             task = AsyncResult(exp.get('task_id'), app=celery_app)
+             status = task.state
+             exp['status'] = status # Deney objesini de anlık durumla güncelle
+        
+        timestamp = exp.get('completed_at') or exp.get('failed_at') or exp.get('config', {}).get('start_time', '1970-01-01T00:00:00')
+        return (status_order.get(status, 99), timestamp)
+
+    experiments.sort(key=sort_key, reverse=False) # Status'e göre artan, tarihe göre azalan sıralama için
+    # reverse=False olacak ama sıralama anahtarını (timestamp) negatif yapmak aynı etkiyi verir.
+    # En basit yol:
+    experiments.sort(key=lambda x: x.get('config', {}).get('start_time', ''), reverse=True)
+    
     return experiments
 
 
 def start_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
-    # ... (Aynı kalacak) ...
     pipeline_name = config.get("pipeline_name", "unknown")
     print(f"Service: Sending task for pipeline '{pipeline_name}' to Celery with config: {config}") # Logu güncellendi
     task = start_training_pipeline.delay(config) 
     return {"message": "Experiment submitted to worker.", "task_id": task.id}
 
 def get_task_status(task_id: str) -> Dict[str, Any]:
+    # Artık /experiments endpoint'i tüm veriyi döndürdüğü için bu endpoint'e olan ihtiyaç azalıyor.
+    # Ama WebSocket'in ilk veri çekişi için hala değerli olabilir.
     task_result = AsyncResult(task_id, app=celery_app)
     status = task_result.state
     
