@@ -2,11 +2,13 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
-    # .env dosyasından okunacak değişkenler
     PROJECT_NAME: str = "AzuraForge API"
     API_V1_PREFIX: str = "/api/v1"
     
-    # .env dosyasının konumu (opsiyonel)
+    # Yeni CORS ayarı
+    # Virgülle ayrılmış URL'ler veya tümüne izin vermek için "*"
+    CORS_ORIGINS: str = "*" # Varsayılan olarak tümüne izin ver (geliştirme için)
+    
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding='utf-8')
 
 settings = Settings()

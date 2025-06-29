@@ -9,18 +9,24 @@ from .routes import experiments, pipelines, streaming
 def create_app() -> FastAPI:
     app = FastAPI(title=settings.PROJECT_NAME, version="0.1.0")
     
+    # CORS ayarlarını dinamik olarak belirle
+    if settings.CORS_ORIGINS == "*":
+        allowed_origins = ["*"]
+    else:
+        allowed_origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(',')]
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"], allow_credentials=True,
-        allow_methods=["*"], allow_headers=["*"],
+        allow_origins=allowed_origins, # <-- Burası değişti
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     # --- KRİTİK DÜZELTME: Prefix'i geri ekliyoruz ---
-    # Router'lar kendi içlerinde '/experiments' ve '/pipelines' prefix'lerini zaten içeriyor.
-    # Burada /api/v1'i ekleyerek, '/api/v1/experiments' ve '/api/v1/pipelines' elde edeceğiz.
     app.include_router(experiments.router, prefix=settings.API_V1_PREFIX)
     app.include_router(pipelines.router, prefix=settings.API_V1_PREFIX)
-    app.include_router(streaming.router) # WebSocket'in ayrı bir prefix'i olmamalı
+    app.include_router(streaming.router)
     
     @app.get("/", tags=["Root"])
     def read_root():
