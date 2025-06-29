@@ -17,18 +17,16 @@ async def websocket_task_status(websocket: WebSocket, task_id: str):
     try:
         initial_status = {
             "state": task_result.state,
-            "details": task_result.info.get('details') if isinstance(task_result.info, dict) else task_result.info,
+            "details": task_result.info, # DÜZELTME: Gelen bilgiyi doğrudan 'details' olarak ata
             "result": task_result.result if task_result.ready() else None
         }
         await websocket.send_json(initial_status)
 
         while not task_result.ready():
-            # DÜZELTME: Gelen meta verinin yapısını kontrol et ve 'details' anahtarını kullan
             if task_result.state == 'PROGRESS':
-                details = task_result.info.get('details', {}) if isinstance(task_result.info, dict) else {}
                 await websocket.send_json({
                     "state": task_result.state,
-                    "details": details,
+                    "details": task_result.info, # DÜZELTME: Gelen bilgiyi olduğu gibi gönder
                 })
             await asyncio.sleep(1)
         
