@@ -10,20 +10,14 @@ requires-python = ">=3.8"
 
 dependencies = [
     "azuraforge-learner @ git+https://github.com/AzuraForge/learner.git@main",
-    # Yeni önerilen: (PyPI'da olsaydı) ( Ancak şu an için henüz PyPI'da değil )
-    # "azuraforge-learner==0.1.1", # Belirli bir sürümü hedefle
-    # Veya hala yerel geliştirme için, ama geliştirme rehberindeki -e kurulumu öncelikli
-    # "azuraforge-learner @ git+https://github.com/AzuraForge/learner.git@v0.1.1", # Eğer tag'ler kullanılıyorsa
-
     "azuraforge-worker @ git+https://github.com/AzuraForge/worker.git@main",
-    # Yeni önerilen:
-    # "azuraforge-worker==0.1.0", # Belirli bir sürümü hedefle
-
     "azuraforge-applications @ git+https://github.com/AzuraForge/applications.git@main",
-    # Yeni önerilen:
-    # "azuraforge-applications==0.1.0", # Belirli bir sürümü hedefle
-
-    "fastapi", "uvicorn[standard]", "pydantic-settings", "python-dotenv", "pyyaml",
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic-settings",
+    "python-dotenv",
+    "pyyaml",
+    "redis" # YENİ BAĞIMLILIK
 ]
 
 [project.scripts]
