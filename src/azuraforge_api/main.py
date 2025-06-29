@@ -26,7 +26,7 @@ def create_app() -> FastAPI:
     # --- KRİTİK DÜZELTME: Prefix'i geri ekliyoruz ---
     app.include_router(experiments.router, prefix=settings.API_V1_PREFIX)
     app.include_router(pipelines.router, prefix=settings.API_V1_PREFIX)
-    app.include_router(streaming.router)
+    app.include_router(streaming.router) # WebSocket router'ı eklendi
     
     @app.get("/", tags=["Root"])
     def read_root():

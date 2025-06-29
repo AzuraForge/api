@@ -35,13 +35,21 @@ async def websocket_task_status(websocket: WebSocket, task_id: str):
         # Görev bittiğinde (SUCCESS, FAILURE vb.) son durumu ve sonucu gönder
         await websocket.send_json({
             "state": task_result.state,
-            "details": task_result.result,
+            "details": task_result.result, # Başarı durumunda sonuç, hata durumunda hata detayları
         })
 
     except WebSocketDisconnect:
         logging.warning(f"WebSocket disconnected for task: {task_id}")
     except Exception as e:
         logging.error(f"An error occurred in WebSocket for task {task_id}: {e}")
+        # Hata durumunda da istemciye bildirim gönder
+        try:
+            await websocket.send_json({
+                "state": "ERROR",
+                "details": {"message": str(e), "task_id": task_id}
+            })
+        except Exception:
+            pass # Eğer gönderilemezse, bağlantı zaten kapanmıştır.
     finally:
         logging.info(f"Closing WebSocket for task {task_id}")
         # Bağlantıyı her durumda kapat

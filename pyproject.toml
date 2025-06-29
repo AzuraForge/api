@@ -11,7 +11,7 @@ requires-python = ">=3.8"
 
 dependencies = [
     "azuraforge-learner @ git+https://github.com/AzuraForge/learner.git@main",
-    "azuraforge-worker @ git+https://github.com/AzuraForge/worker.git@main",
+    "azuraforge-worker @ git+https://github.com/AzuraForge/worker.git@main", # Worker bağımlılığı, streaming için şart
     "azuraforge-applications @ git+https://github.com/AzuraForge/applications.git@main",
     "fastapi", "uvicorn[standard]", "pydantic-settings", "python-dotenv", "pyyaml",
 

@@ -20,6 +20,7 @@ def get_available_pipelines() -> List[Dict[str, Any]]:
         return []
 
 def list_experiments() -> List[Dict[str, Any]]:
+    # **GÜNCELLENDİ:** completed_at bilgisi de results.json'dan okunacak.
     experiment_files = glob.glob(f"{REPORTS_BASE_DIR}/**/results.json", recursive=True)
     experiments = []
     for f_path in experiment_files:
@@ -32,6 +33,8 @@ def list_experiments() -> List[Dict[str, Any]]:
                     "pipeline_name": data.get("config", {}).get("pipeline_name", "N/A"),
                     "ticker": data.get("config", {}).get("data_sourcing", {}).get("ticker", "N/A"),
                     "final_loss": data.get("results", {}).get("final_loss"),
+                    "completed_at": data.get("completed_at"), # Yeni eklendi
+                    "started_at": data.get("config", {}).get("start_time"), # Eğer config'de varsa
                 })
         except Exception as e:
             print(f"Warning: Could not read results.json from {f_path}: {e}")
@@ -54,4 +57,8 @@ def get_task_status(task_id: str) -> Dict[str, Any]:
     if isinstance(details, Exception): # Eğer gelen bir hata objesiyse
         details = str(details) # Onu string'e çevirerek JSON serileştirme hatasını önle
     
-    return {"task_id": task_id, "status": status, "result": details}
+    # Başarı durumunda, Celery result.result'ı doğrudan alıp gönder
+    if status == 'SUCCESS' or status == 'FAILURE':
+        return {"task_id": task_id, "status": status, "result": task_result.result}
+    
+    return {"task_id": task_id, "status": status, "details": details}
