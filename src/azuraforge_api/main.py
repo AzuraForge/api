@@ -1,5 +1,5 @@
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter # DÜZELTME: APIRouter'ı import et
 from fastapi.middleware.cors import CORSMiddleware
 
 from .core.config import settings
@@ -16,16 +16,24 @@ def create_app() -> FastAPI:
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=allowed_origins, # <-- Burası değişti
+        allow_origins=allowed_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
 
-    # --- KRİTİK DÜZELTME: Prefix'i geri ekliyoruz ---
-    app.include_router(experiments.router, prefix=settings.API_V1_PREFIX)
-    app.include_router(pipelines.router, prefix=settings.API_V1_PREFIX)
-    app.include_router(streaming.router) # WebSocket router'ı eklendi
+    # DÜZELTME: İç içe FastAPI uygulaması yerine tek bir APIRouter kullanıyoruz.
+    # Bu, "AttributeError: 'FastAPI' object has no attribute 'default_response_class'"
+    # hatasını çözer.
+    api_router = APIRouter()
+    api_router.include_router(experiments.router)
+    api_router.include_router(pipelines.router)
+    
+    # Şimdi bu birleştirilmiş router'ı tek bir prefix ile ana uygulamaya ekliyoruz.
+    app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+    
+    # WebSocket router'ı prefix dışında, doğrudan ana uygulamaya ekleniyor.
+    app.include_router(streaming.router)
     
     @app.get("/", tags=["Root"])
     def read_root():
