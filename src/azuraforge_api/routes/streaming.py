@@ -15,25 +15,23 @@ async def websocket_task_status(websocket: WebSocket, task_id: str):
     task_result = AsyncResult(task_id, app=celery_app)
     
     try:
-        # DÜZELTME: Bağlantı kurulur kurulmaz ilk durumu gönder.
-        # Bu, hızlı biten görevlerin son durumunun anında UI'a ulaşmasını sağlar.
         initial_status = {
             "state": task_result.state,
-            "details": task_result.info if task_result.state == 'PROGRESS' else None,
+            "details": task_result.info.get('details') if isinstance(task_result.info, dict) else task_result.info,
             "result": task_result.result if task_result.ready() else None
         }
         await websocket.send_json(initial_status)
 
-        # Görev tamamlanana kadar döngüde kal
         while not task_result.ready():
+            # DÜZELTME: Gelen meta verinin yapısını kontrol et ve 'details' anahtarını kullan
             if task_result.state == 'PROGRESS':
+                details = task_result.info.get('details', {}) if isinstance(task_result.info, dict) else {}
                 await websocket.send_json({
                     "state": task_result.state,
-                    "details": task_result.info,
+                    "details": details,
                 })
             await asyncio.sleep(1)
         
-        # Döngü bittiğinde son durumu tekrar gönder (garanti amaçlı)
         await websocket.send_json({
             "state": task_result.state,
             "result": task_result.result,
@@ -44,12 +42,10 @@ async def websocket_task_status(websocket: WebSocket, task_id: str):
     except Exception as e:
         logging.error(f"An error occurred in WebSocket for task {task_id}: {e}")
         try:
-            await websocket.send_json({
-                "state": "ERROR",
-                "details": {"message": str(e), "task_id": task_id}
-            })
+            await websocket.send_json({"state": "ERROR", "details": {"message": str(e)}})
         except Exception:
             pass 
     finally:
         logging.info(f"Closing WebSocket for task {task_id}")
-        await websocket.close()
+        if websocket.client_state.name != 'DISCONNECTED':
+             await websocket.close()
