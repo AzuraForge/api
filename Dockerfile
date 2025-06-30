@@ -12,8 +12,12 @@ WORKDIR /app
 # Önce projenin TÜM dosyalarını kopyala.
 COPY . .
 
-# Tüm bağımlılıkları ve projeyi kur. -e modu sayesinde scriptler PATH'e eklenir.
+# Tüm bağımlılıkları ve projeyi kur.
+# -e modu artık CMD için gerekli değil, ancak geliştirme sırasında
+# konteynere bağlanıp değişiklik yapmak için yararlı olabilir.
 RUN pip install --no-cache-dir -e .[dev]
 
-# Konteyner başlatıldığında çalıştırılacak komut
-CMD ["start-api"]
+# === NİHAİ DEĞİŞİKLİK BURADA ===
+# Projenin ana giriş modülünü doğrudan Python ile çalıştırıyoruz.
+CMD ["python", "-m", "azuraforge_api.main"]
+# === DEĞİŞİKLİK SONU ===
