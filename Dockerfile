@@ -13,8 +13,10 @@ WORKDIR /app
 COPY pyproject.toml .
 COPY setup.py .
 
-# SADECE dış bağımlılıkları kur
-RUN pip install --no-cache-dir -r <(grep -E '^[a-zA-Z]' pyproject.toml | sed -e 's/\[.*\]//' -e "s/ //g" -e "s/==.*//")
+# === DEĞİŞİKLİK BURADA: sh uyumlu komut kullanılıyor ===
+# Dış bağımlılıkları ayıkla ve xargs ile pip'e gönder
+RUN grep -E '^[a-zA-Z]' pyproject.toml | sed -e 's/\[.*\]//' -e 's/ //g' -e 's/"//g' -e 's/,//g' | xargs -r pip install --no-cache-dir
+# === DEĞİŞİKLİK SONU ===
 
 # Şimdi kaynak kodunu kopyala
 COPY src ./src
