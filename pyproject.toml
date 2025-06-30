@@ -8,16 +8,17 @@ version = "0.1.0"
 description = "The API server for the AzuraForge Platform."
 requires-python = ">=3.8"
 
+# api/pyproject.toml içindeki [project] dependencies bölümü
 dependencies = [
-    "azuraforge-learner @ git+https://github.com/AzuraForge/learner.git@main",
-    "azuraforge-worker @ git+https://github.com/AzuraForge/worker.git@main",
-    "azuraforge-applications @ git+https://github.com/AzuraForge/applications.git@main",
+    "azuraforge-learner @ git+https://github.com/AzuraForge/learner.git@v0.1.3",        # <-- DEĞİŞTİ
+    "azuraforge-worker @ git+https://github.com/AzuraForge/worker.git@v0.1.0",         # <-- DEĞİŞTİ
+    "azuraforge-applications @ git+https://github.com/AzuraForge/applications.git@v0.1.0", # <-- DEĞİŞTİ
     "fastapi",
     "uvicorn[standard]",
     "pydantic-settings",
     "python-dotenv",
     "pyyaml",
-    "redis" # YENİ BAĞIMLILIK
+    "redis"
 ]
 
 [project.scripts]
