@@ -9,20 +9,14 @@ RUN apt-get update && \
 # Çalışma dizinini ayarla
 WORKDIR /app
 
-# Önce SADECE bağımlılık dosyalarını kopyala
-COPY pyproject.toml .
-COPY setup.py .
+# === BASİTLEŞTİRİLMİŞ YAPI ===
+# Önce projenin TÜM dosyalarını kopyala. Bu, en sağlam yöntemdir.
+COPY . .
 
-# === DEĞİŞİKLİK BURADA: sh uyumlu komut kullanılıyor ===
-# Dış bağımlılıkları ayıkla ve xargs ile pip'e gönder
-RUN grep -E '^[a-zA-Z]' pyproject.toml | sed -e 's/\[.*\]//' -e 's/ //g' -e 's/"//g' -e 's/,//g' | xargs -r pip install --no-cache-dir
-# === DEĞİŞİKLİK SONU ===
-
-# Şimdi kaynak kodunu kopyala
-COPY src ./src
-
-# Son olarak projenin kendisini "düzenlenebilir" modda kur
-RUN pip install --no-cache-dir -e .
+# Şimdi, tüm dosyalar içerideyken, tek bir komutla her şeyi kur.
+# pip, pyproject.toml'u okuyacak ve tüm bağımlılıkları kendisi çözecektir.
+RUN pip install --no-cache-dir -e .[dev]
+# === BİTTİ ===
 
 # Konteyner başlatıldığında çalıştırılacak komut
 CMD ["start-api"]
