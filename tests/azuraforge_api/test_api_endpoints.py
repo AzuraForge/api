@@ -1,5 +1,5 @@
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from unittest.mock import patch
 
 # Test edilecek FastAPI uygulamasını import et
@@ -8,12 +8,15 @@ from azuraforge_api.main import app
 # pytest'in asenkron testleri çalıştırmasını sağlar
 pytestmark = pytest.mark.asyncio
 
+# === DEĞİŞİKLİK BURADA ===
 # API'ye yapılan tüm çağrılar için bir istemci oluşturalım
-# 'app' argümanı, istemcinin doğrudan uygulama ile konuşmasını sağlar, ağ üzerinden değil.
+# 'app' yerine ASGITransport kullanarak istemcinin doğrudan uygulama ile konuşmasını sağlıyoruz.
 @pytest.fixture
 async def async_client():
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
+# === DEĞİŞİKLİK SONU ===
 
 async def test_read_root(async_client: AsyncClient):
     """Kök endpoint'in doğru mesajı döndürdüğünü test eder."""
