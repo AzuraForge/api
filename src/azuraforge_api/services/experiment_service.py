@@ -23,16 +23,9 @@ def get_db():
         db.close()
 
 def _generate_config_combinations(config: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:
-    """
-    Konfigürasyon içindeki listeleri tespit eder ve tüm olası kombinasyonları üretir.
-    Örn: {'lr': [0.1, 0.01], 'epochs': [50]} -> {'lr': 0.1, 'epochs': 50}, {'lr': 0.01, 'epochs': 50}
-    """
-    # Değişken parametreleri (değeri liste olanlar) bul
     varying_params = {}
-    # Sabit parametreleri (değeri liste olmayanlar) bul
     static_params = {}
     
-    # JSON içinde gezinmek için iç içe bir fonksiyon
     def _traverse_and_split(conf, path=""):
         for key, value in conf.items():
             new_path = f"{path}.{key}" if path else key
@@ -46,17 +39,14 @@ def _generate_config_combinations(config: Dict[str, Any]) -> Generator[Dict[str,
     _traverse_and_split(config)
 
     if not varying_params:
-        # Değişken parametre yoksa, orijinal config'i tek bir eleman olarak döndür
         yield config
         return
 
-    # Kombinasyonları oluştur
     param_names = list(varying_params.keys())
     param_values = list(varying_params.values())
     
     for combo in itertools.product(*param_values):
         new_config = {}
-        # Önce tüm statik parametreleri kopyala
         for key_path, value in static_params.items():
             keys = key_path.split('.')
             d = new_config
@@ -64,7 +54,6 @@ def _generate_config_combinations(config: Dict[str, Any]) -> Generator[Dict[str,
                 d = d.setdefault(k, {})
             d[keys[-1]] = value
             
-        # Sonra bu kombinasyondaki değişken parametreleri ekle
         for i, key_path in enumerate(param_names):
             keys = key_path.split('.')
             d = new_config
@@ -76,9 +65,7 @@ def _generate_config_combinations(config: Dict[str, Any]) -> Generator[Dict[str,
 
 # --- API Servis Fonksiyonları ---
 
-# ... get_available_pipelines ve get_default_pipeline_config aynı kalıyor ...
 def get_available_pipelines() -> List[Dict[str, Any]]:
-    #... (kod değişmedi)
     official_apps_data = []
     try:
         with resources.open_text("azuraforge_applications", "official_apps.json") as f:
@@ -90,7 +77,6 @@ def get_available_pipelines() -> List[Dict[str, Any]]:
     return available_pipelines
 
 def get_default_pipeline_config(pipeline_id: str) -> Dict[str, Any]:
-    #... (kod değişmedi)
     pipeline_info = AVAILABLE_PIPELINES_AND_CONFIGS.get(pipeline_id)
     if not pipeline_info:
         raise ValueError(f"Pipeline '{pipeline_id}' not found.")
@@ -102,11 +88,7 @@ def get_default_pipeline_config(pipeline_id: str) -> Dict[str, Any]:
 
 
 def start_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Yeni bir deneyi veya deney grubunu başlatmak için Celery'ye görev(ler) gönderir.
-    """
     task_ids = []
-    # Batch ID ve Adı (eğer bir grup deneyi ise)
     batch_id = str(uuid.uuid4())
     batch_name = config.pop("batch_name", f"Batch-{datetime.now().strftime('%Y-%m-%d-%H%M')}")
     
@@ -114,7 +96,6 @@ def start_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
     num_combinations = len(combinations)
 
     for single_config in combinations:
-        # Eğer tek bir deney ise batch_id ve name'i null yap
         if num_combinations > 1:
             single_config['batch_id'] = batch_id
             single_config['batch_name'] = batch_name
@@ -135,24 +116,37 @@ def start_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
         return {"message": "Experiment submitted to worker.", "task_id": task_ids[0]}
 
 def list_experiments() -> List[Dict[str, Any]]:
-    # ... (kod aynı, yeni alanlar otomatik gelecek şekilde güncellenmeli) ...
+    """Veritabanındaki tüm deneylerin bir özetini en yeniden eskiye doğru listeler."""
     with SessionLocal() as db:
         experiments = db.query(Experiment).order_by(desc(Experiment.created_at)).all()
-        return [
-            {
-                "experiment_id": exp.id, "task_id": exp.task_id, "pipeline_name": exp.pipeline_name,
-                "status": exp.status, "config": exp.config, "results": exp.results, "error": exp.error,
+        
+        results_summary = []
+        for exp in experiments:
+            # Sadece Dashboard'un liste görünümü için gerekli olan verileri gönderiyoruz.
+            summary = {
+                "experiment_id": exp.id,
+                "task_id": exp.task_id,
+                "pipeline_name": exp.pipeline_name,
+                "status": exp.status,
                 "created_at": exp.created_at.isoformat() if exp.created_at else None,
                 "completed_at": exp.completed_at.isoformat() if exp.completed_at else None,
                 "failed_at": exp.failed_at.isoformat() if exp.failed_at else None,
-                # YENİ ALANLAR
                 "batch_id": exp.batch_id,
-                "batch_name": exp.batch_name
-            } for exp in experiments
-        ]
+                "batch_name": exp.batch_name,
+                "config_summary": {
+                    "ticker": exp.config.get("data_sourcing", {}).get("ticker", "N/A") if exp.config else "N/A",
+                    "epochs": exp.config.get("training_params", {}).get("epochs", "N/A") if exp.config else "N/A",
+                    "lr": exp.config.get("training_params", {}).get("lr", "N/A") if exp.config else "N/A",
+                },
+                "results_summary": {
+                    "final_loss": exp.results.get("final_loss") if exp.results else None
+                }
+            }
+            results_summary.append(summary)
+        return results_summary
 
 def get_experiment_details(experiment_id: str) -> Dict[str, Any]:
-    # ... (kod aynı, yeni alanlar otomatik gelecek şekilde güncellenmeli) ...
+    """Belirli bir deneyin tüm detaylarını veritabanından çeker."""
     with SessionLocal() as db:
         exp = db.query(Experiment).filter(Experiment.id == experiment_id).first()
         if not exp:
@@ -164,12 +158,10 @@ def get_experiment_details(experiment_id: str) -> Dict[str, Any]:
             "created_at": exp.created_at.isoformat() if exp.created_at else None,
             "completed_at": exp.completed_at.isoformat() if exp.completed_at else None,
             "failed_at": exp.failed_at.isoformat() if exp.failed_at else None,
-            # YENİ ALANLAR
             "batch_id": exp.batch_id,
-            "batch_name": exp.batch_name
+            "batch_name": exp.batch_name,
         }
 
 def get_task_status(task_id: str) -> Dict[str, Any]:
-    #... (kod değişmedi)
     task_result = AsyncResult(task_id, app=celery_app)
     return {"status": task_result.state, "details": task_result.info}
