@@ -1,6 +1,6 @@
 # api/src/azuraforge_api/routes/experiments.py
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any
 from ..services import experiment_service
 
@@ -16,18 +16,17 @@ def create_new_experiment(config: Dict[str, Any]):
 
 @router.get("/experiments/{task_id}/status", response_model=Dict[str, Any])
 def get_experiment_status(task_id: str):
+    # Bu endpoint artık çok gerekli değil ama kalabilir.
     return experiment_service.get_task_status(task_id)
 
-# YENİ ENDPOINT
-@router.get("/experiments/{experiment_id}/report")
-def read_experiment_report(experiment_id: str):
+# YENİ ENDPOINT (read_experiment_report yerine)
+@router.get("/experiments/{experiment_id}/details", response_model=Dict[str, Any])
+def read_experiment_details(experiment_id: str):
     """
-    Belirli bir deneyin Markdown raporunu metin olarak döndürür.
+    Belirli bir deneyin tüm detaylarını (config, results, metrics, history)
+     içeren JSON verisini döndürür.
     """
     try:
-        report_content = experiment_service.get_experiment_report(experiment_id)
-        # Markdown içeriğini düz metin olarak, text/markdown content type ile döndür
-        return Response(content=report_content, media_type="text/markdown")
+        return experiment_service.get_experiment_details(experiment_id)
     except HTTPException as e:
-        # Servis katmanından gelen HTTPException'ı doğrudan yükselt
         raise e
