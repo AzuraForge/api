@@ -9,14 +9,11 @@ RUN apt-get update && \
 # Çalışma dizinini ayarla
 WORKDIR /app
 
-# === BASİTLEŞTİRİLMİŞ YAPI ===
-# Önce projenin TÜM dosyalarını kopyala. Bu, en sağlam yöntemdir.
+# Önce projenin TÜM dosyalarını kopyala
 COPY . .
 
-# Şimdi, tüm dosyalar içerideyken, tek bir komutla her şeyi kur.
-# pip, pyproject.toml'u okuyacak ve tüm bağımlılıkları kendisi çözecektir.
-RUN pip install --no-cache-dir -e .[dev]
-# === BİTTİ ===
+# Tüm bağımlılıkları ve projeyi kur
+RUN pip install --no-cache-dir .[dev]
 
-# Konteyner başlatıldığında çalıştırılacak komut
-CMD ["start-api"]
+# Konteyner başlatıldığında çalıştırılacak komut (en sağlam yöntem)
+CMD ["python", "-m", "azuraforge_api.main"]
