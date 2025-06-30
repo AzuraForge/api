@@ -1,7 +1,7 @@
 # Base image olarak Python 3.10'un slim versiyonunu kullan
 FROM python:3.10-slim-bullseye
 
-# Gerekli sistem paketlerini kur (Git, pip'in Git repolarından kurulum yapması için gerekli)
+# Gerekli sistem paketlerini kur
 RUN apt-get update && \
     apt-get install -y git --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
@@ -9,15 +9,18 @@ RUN apt-get update && \
 # Çalışma dizinini ayarla
 WORKDIR /app
 
-# Önce sadece bağımlılık dosyalarını kopyala (Docker katman cache'ini optimize etmek için)
+# Önce SADECE bağımlılık dosyalarını kopyala
 COPY pyproject.toml .
 COPY setup.py .
-# Kaynak kodunu kopyala
+
+# SADECE dış bağımlılıkları kur
+RUN pip install --no-cache-dir -r <(grep -E '^[a-zA-Z]' pyproject.toml | sed -e 's/\[.*\]//' -e "s/ //g" -e "s/==.*//")
+
+# Şimdi kaynak kodunu kopyala
 COPY src ./src
 
-# API'nin tüm bağımlılıklarını kur
-RUN pip install --no-cache-dir .
+# Son olarak projenin kendisini "düzenlenebilir" modda kur
+RUN pip install --no-cache-dir -e .
 
-# === DEĞİŞİKLİK BURADA ===
-CMD ["python", "-m", "azuraforge_api.main"]
-# === DEĞİŞİKLİK SONU ===
+# Konteyner başlatıldığında çalıştırılacak komut
+CMD ["start-api"]
