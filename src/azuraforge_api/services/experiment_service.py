@@ -1,5 +1,3 @@
-# api/src/azuraforge_api/services/experiment_service.py
-
 import json
 import itertools
 import uuid
@@ -10,20 +8,11 @@ from fastapi import HTTPException
 from celery.result import AsyncResult
 from sqlalchemy import desc
 
-# === DEĞİŞİKLİK BURADA ===
-# Doğru göreli yoldan import yapıyoruz (bir üst dizinden)
-from ..database import SessionLocal
+from ..database import SessionLocal # DOĞRU IMPORT
 from azuraforge_worker.database import Experiment 
-# === DEĞİŞİKLİK SONU ===
 
 from azuraforge_worker import celery_app
 from azuraforge_worker.tasks.training_tasks import AVAILABLE_PIPELINES_AND_CONFIGS
-
-# ... (dosyanın geri kalanı aynı) ...
-# ... get_available_pipelines, get_default_pipeline_config, start_experiment ...
-# ... list_experiments, get_experiment_details, get_task_status, _generate_config_combinations ...
-# Not: Önceki mesajdaki tam içerik zaten doğruydu, sadece bu import satırını doğrulamak önemli.
-# Kopyala-yapıştır kolaylığı için tam içeriği tekrar veriyorum:
 
 def get_available_pipelines() -> List[Dict[str, Any]]:
     official_apps_data = []

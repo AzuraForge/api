@@ -9,11 +9,11 @@ RUN apt-get update && \
 # Çalışma dizinini ayarla
 WORKDIR /app
 
-# Önce projenin TÜM dosyalarını kopyala
+# Önce projenin TÜM dosyalarını kopyala.
 COPY . .
 
-# Tüm bağımlılıkları ve projeyi kur
-RUN pip install --no-cache-dir .[dev]
+# Tüm bağımlılıkları ve projeyi kur. -e modu sayesinde scriptler PATH'e eklenir.
+RUN pip install --no-cache-dir -e .[dev]
 
-# Konteyner başlatıldığında çalıştırılacak komut (en sağlam yöntem)
-CMD ["python", "-m", "azuraforge_api.main"]
+# Konteyner başlatıldığında çalıştırılacak komut
+CMD ["start-api"]
