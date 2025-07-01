@@ -1,19 +1,19 @@
 # api/pyproject.toml
 
 [build-system]
-requires = ["setuptools>=61.0", "wheel"] # 'wheel' eklendi
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "azuraforge-api"
-version = "0.2.4" # Bu versiyon otomatik artırılacak
+version = "0.2.4"
 description = "The API server for the AzuraForge Platform."
 requires-python = ">=3.8"
 
 dependencies = [
-    "azuraforge-learner @ git+https://github.com/AzuraForge/learner.git@v0.1.5", # learner'ın güncel versiyonuna işaret etmeli (burada v0.1.5)
-    "azuraforge-worker @ git+https://github.com/AzuraForge/worker.git@v0.2.4", # worker'ın güncel versiyonuna işaret etmeli (burada v0.2.4)
-    "azuraforge-applications @ git+https://github.com/AzuraForge/applications.git@v0.1.0", # applications'ın güncel versiyonuna işaret etmeli (burada v0.1.0)
+    "azuraforge-learner @ git+https://github.com/AzuraForge/learner.git@v0.1.5",
+    "azuraforge-worker @ git+https://github.com/AzuraForge/worker.git@v0.2.4",
+    "azuraforge-applications @ git+https://github.com/AzuraForge/applications.git@v0.1.0",
     "fastapi",
     "uvicorn[standard]",
     "pydantic-settings",
@@ -22,7 +22,7 @@ dependencies = [
     "redis",
     "SQLAlchemy",
     "psycopg2-binary",
-    "python-semantic-release" # YENİ: Otomatik versiyonlama için eklendi
+    "python-semantic-release"
 ]
 
 [project.scripts]
@@ -41,7 +41,6 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 
-# YENİ: semantic-release yapılandırması
 [tool.semantic_release]
 branch = "main"
 version_variable = "pyproject.toml:project.version"
