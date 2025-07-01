@@ -1,15 +1,16 @@
+# api/pyproject.toml (TAM KOD - Sadece projeyle ilgili kısımlar)
 [build-system]
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "azuraforge-api"
-version = "0.2.4" # Versiyonu senkronize ediyoruz
+version = "0.2.4"
 description = "The API server for the AzuraForge Platform."
 requires-python = ">=3.8"
 
 dependencies = [
-    "azuraforge-learner @ git+https://github.com/AzuraForge/learner.git@v0.1.4",
+    "azuraforge-learner @ git+https://github.com/AzuraForge/learner.git@v0.1.5",
     "azuraforge-worker @ git+https://github.com/AzuraForge/worker.git@v0.2.4",
     "azuraforge-applications @ git+https://github.com/AzuraForge/applications.git@v0.1.0",
     "fastapi",
