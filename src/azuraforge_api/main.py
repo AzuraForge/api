@@ -26,7 +26,10 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title=settings.PROJECT_NAME, 
         version="0.1.0",
-        lifespan=lifespan
+        lifespan=lifespan,
+        # DÜZELTME: docs_url ve redoc_url'i API prefix'i altına taşıyoruz
+        docs_url=f"{settings.API_V1_PREFIX}/docs",
+        redoc_url=f"{settings.API_V1_PREFIX}/redoc"
     )
     
     if settings.CORS_ORIGINS == "*":
