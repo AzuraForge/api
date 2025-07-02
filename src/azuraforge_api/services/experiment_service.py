@@ -122,8 +122,10 @@ def start_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
 
 def list_experiments() -> List[Dict[str, Any]]:
     """
-    Veritabanındaki tüm deneylerin özetini (tam config, results içermeden)
+    Veritabanındaki tüm deneylerin özetini VE TAM DETAYLARINI (config, results)
     en yeniden eskiye doğru listeler.
+    Bu fonksiyon, UI'daki genel bakış sayfasının tüm bilgileri tek çağrıda almasını sağlar.
+    Performans iyileştirmesi, Frontend tarafında yapılmalıdır (render optimizasyonları).
     """
     db = SessionLocal()
     try:
@@ -142,8 +144,6 @@ def list_experiments() -> List[Dict[str, Any]]:
                 "batch_id": exp.batch_id,
                 "batch_name": exp.batch_name,
                 # config_summary alanını, full config'den türetelim
-                # KRİTİK DÜZELTME: config ve results objelerini burada DÖNDÜRMÜYORUZ!
-                # Sadece özet bilgileri döndürüyoruz.
                 "config_summary": {
                     "ticker": exp.config.get("data_sourcing", {}).get("ticker", "N/A") if exp.config else "N/A",
                     "epochs": exp.config.get("training_params", {}).get("epochs", "N/A") if exp.config else "N/A",
@@ -152,12 +152,13 @@ def list_experiments() -> List[Dict[str, Any]]:
                 "results_summary": {
                     "final_loss": exp.results.get("final_loss") if exp.results else None,
                     "r2_score": exp.results.get("metrics", {}).get("r2_score") if exp.results else None,
-                    "mae": exp.results.get("metrics", {}).get("mae") if exp.results else None # MAE'yi de ekle
+                    "mae": exp.results.get("metrics", {}).get("mae") if exp.results else None
                 },
-                # Tam config, results ve error objeleri BURADA DÖNMEMELİ!
-                # "config": exp.config, # <--- KALDIRILDI!
-                # "results": exp.results, # <--- KALDIRILDI!
-                # "error": exp.error # <--- KALDIRILDI!
+                # KRİTİK DÜZELTME: Tam config, results ve error objelerini geri ekliyoruz!
+                # Bu, Frontend'deki kaybolan verileri ve grafikleri geri getirecek.
+                "config": exp.config, 
+                "results": exp.results, 
+                "error": exp.error
             }
             all_experiments_data.append(summary)
         return all_experiments_data
