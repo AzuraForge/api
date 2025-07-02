@@ -11,9 +11,9 @@ description = "The API server for the AzuraForge Platform."
 requires-python = ">=3.10"
 
 dependencies = [
-    "azuraforge-learner @ git+https://github.com/AzuraForge/learner.git@v0.1.1",
-    "azuraforge-worker @ git+https://github.com/AzuraForge/worker.git@v0.1.1",
-    "azuraforge-applications @ git+https://github.com/AzuraForge/applications.git@v0.1.0",
+    "azuraforge-learner @ git+https://github.com/AzuraForge/learner.git@main",
+    "azuraforge-worker @ git+https://github.com/AzuraForge/worker.git@main",
+    "azuraforge-applications @ git+https://github.com/AzuraForge/applications.git@main",
     "fastapi",
     "uvicorn[standard]",
     "pydantic-settings",
