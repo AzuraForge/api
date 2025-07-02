@@ -5,6 +5,8 @@ import os
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import redis.asyncio as redis
 
+logger = logging.getLogger(__name__) # <--- Yeni satır
+
 router = APIRouter()
 
 async def redis_listener(websocket: WebSocket, task_id: str):
@@ -32,18 +34,18 @@ async def redis_listener(websocket: WebSocket, task_id: str):
             # Bu, istemci bağlantıyı kapattığında döngüden çıkmayı sağlar.
             await asyncio.sleep(0.1) # CPU'yu yormamak için kısa bir bekleme
     except asyncio.CancelledError:
-        logging.info(f"Redis listener for task {task_id} cancelled.")
+        logger.info(f"Redis listener for task {task_id} cancelled.") # <--- logging.info -> logger.info
     except Exception as e:
-        logging.error(f"Redis listener error for task {task_id}: {e}")
+        logger.error(f"Redis listener error for task {task_id}: {e}") # <--- logging.error -> logger.error
     finally:
         await pubsub.unsubscribe(channel)
         await r.close()
-        logging.info(f"Redis listener for task {task_id} cleaned up.")
+        logger.info(f"Redis listener for task {task_id} cleaned up.") # <--- logging.info -> logger.info
 
 @router.websocket("/ws/task_status/{task_id}")
 async def websocket_task_status(websocket: WebSocket, task_id: str):
     await websocket.accept()
-    logging.info(f"WebSocket connection accepted for task: {task_id}")
+    logger.info(f"WebSocket connection accepted for task: {task_id}") # <--- logging.info -> logger.info
     
     # Redis dinleyicisini bir arka plan görevi olarak başlat
     listener_task = asyncio.create_task(redis_listener(websocket, task_id))
@@ -55,10 +57,10 @@ async def websocket_task_status(websocket: WebSocket, task_id: str):
             await websocket.receive_text() # Bu satır aslında istemciden mesaj beklemez,
                                            # sadece bağlantının kopup kopmadığını kontrol eder.
     except WebSocketDisconnect:
-        logging.warning(f"WebSocket disconnected by client for task: {task_id}")
+        logger.warning(f"WebSocket disconnected by client for task: {task_id}") # <--- logging.warning -> logger.warning
     finally:
         # İstemci bağlantıyı kapattığında, arka plandaki Redis dinleyicisini iptal et
         listener_task.cancel()
         # Görevin bitmesini bekle (kaynakların temizlenmesi için)
         await listener_task
-        logging.info(f"Closing WebSocket connection for task {task_id}")
+        logger.info(f"Closing WebSocket connection for task {task_id}") # <--- logging.info -> logger.info
