@@ -5,6 +5,7 @@ import itertools
 import uuid
 import os
 import redis
+import copy
 from datetime import datetime
 from typing import List, Dict, Any, Generator
 from fastapi import HTTPException
@@ -15,14 +16,13 @@ from importlib import resources
 from ..database import SessionLocal, Experiment
 from azuraforge_worker import celery_app
 
-# --- YENİ BÖLÜM: Redis'ten Pipeline Bilgisi Alma ---
+# --- Redis'ten Pipeline Bilgisi Alma ---
 
 REDIS_PIPELINES_KEY = "azuraforge:pipelines_catalog"
 
 def get_pipelines_from_redis() -> List[Dict[str, Any]]:
     """
     Worker tarafından Redis'e kaydedilmiş olan pipeline kataloğunu okur.
-    Bu, API'ın Worker'ın iç yapısını bilmesini engeller.
     """
     try:
         redis_url = os.environ.get("REDIS_URL", "redis://redis:6379/0")
@@ -48,9 +48,10 @@ def get_pipelines_from_redis() -> List[Dict[str, Any]]:
         for name, data_str in pipeline_catalog_raw.items():
             pipeline_data = json.loads(data_str)
             official_meta = official_apps_map.get(name, {})
-            pipeline_data['name'] = official_meta.get('name', name)
-            pipeline_data['description'] = official_meta.get('description', 'No description available.')
-            pipeline_data['repository'] = official_meta.get('repository', '')
+            # Meta verileri pipeline verisine ekle, var olanları ezme
+            for key, value in official_meta.items():
+                if key not in pipeline_data:
+                    pipeline_data[key] = value
             pipelines.append(pipeline_data)
             
         return sorted(pipelines, key=lambda p: p.get('name', p['id']))
@@ -66,22 +67,22 @@ def get_pipelines_from_redis() -> List[Dict[str, Any]]:
 
 def _generate_config_combinations(config: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:
     """
-    Konfigürasyon içindeki listeleri tespit eder ve tüm olası kombinasyonları üretir.
+    Konfigürasyon içindeki `batch_params` anahtarında belirtilen parametreler
+    için tüm olası kombinasyonları üretir. Diğer listelere dokunmaz.
     """
-    varying_params = {}
-    static_params = {}
-    
-    def _traverse_and_split(conf, path=""):
-        for key, value in conf.items():
-            new_path = f"{path}.{key}" if path else key
-            if isinstance(value, list):
-                varying_params[new_path] = value
-            elif isinstance(value, dict):
-                _traverse_and_split(value, new_path)
-            else:
-                static_params[new_path] = value
+    # batch_params anahtarını konfigürasyondan al ve kaldır
+    batch_params = config.pop("batch_params", None)
 
-    _traverse_and_split(config)
+    if not batch_params or not isinstance(batch_params, dict):
+        yield config
+        return
+
+    varying_params = {}
+    for key, value in batch_params.items():
+        if isinstance(value, list):
+            varying_params[key] = value
+        else:
+            varying_params[key] = [value]
 
     if not varying_params:
         yield config
@@ -89,23 +90,17 @@ def _generate_config_combinations(config: Dict[str, Any]) -> Generator[Dict[str,
 
     param_names = list(varying_params.keys())
     param_values = list(varying_params.values())
-    
-    for combo in itertools.product(*param_values):
-        new_config = {}
-        for key_path, value in static_params.items():
-            keys = key_path.split('.')
+
+    for combo_values in itertools.product(*param_values):
+        new_config = copy.deepcopy(config)
+        
+        for i, key in enumerate(param_names):
+            keys = key.split('.')
             d = new_config
             for k in keys[:-1]:
                 d = d.setdefault(k, {})
-            d[keys[-1]] = value
-            
-        for i, key_path in enumerate(param_names):
-            keys = key_path.split('.')
-            d = new_config
-            for k in keys[:-1]:
-                d = d.setdefault(k, {})
-            d[keys[-1]] = combo[i]
-            
+            d[keys[-1]] = combo_values[i]
+        
         yield new_config
 
 
@@ -114,6 +109,7 @@ def _generate_config_combinations(config: Dict[str, Any]) -> Generator[Dict[str,
 def get_available_pipelines() -> List[Dict[str, Any]]:
     """Yüklü tüm pipeline eklentilerini Redis üzerinden keşfederek döndürür."""
     pipelines = get_pipelines_from_redis()
+    # UI'ın beklemediği 'default_config' alanını kaldıralım
     for p in pipelines:
         p.pop('default_config', None)
     return pipelines
@@ -159,8 +155,7 @@ def start_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
 
 def list_experiments() -> List[Dict[str, Any]]:
     """
-    Veritabanındaki tüm deneylerin özetini VE TAM DETAYLARINI (config, results)
-    en yeniden eskiye doğru listeler.
+    Veritabanındaki tüm deneylerin özetini VE TAM DETAYLARINI listeler.
     """
     db = SessionLocal()
     try:
@@ -168,7 +163,6 @@ def list_experiments() -> List[Dict[str, Any]]:
         
         all_experiments_data = []
         for exp in experiments_from_db:
-            # Güvenli erişim için bir helper fonksiyon
             def safe_get(d, keys, default=None):
                 if not isinstance(d, dict): return default
                 for key in keys:
@@ -225,6 +219,6 @@ def get_experiment_details(experiment_id: str) -> Dict[str, Any]:
         db.close()
 
 def get_task_status(task_id: str) -> Dict[str, Any]:
-    """Belirli bir Celery görevinin anlık durumunu döndürür (Celery'den doğrudan sorgu)."""
+    """Belirli bir Celery görevinin anlık durumunu döndürür."""
     task_result = AsyncResult(task_id, app=celery_app)
     return {"status": task_result.state, "details": task_result.info}
