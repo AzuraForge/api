@@ -3,17 +3,64 @@
 import json
 import itertools
 import uuid
+import os
+import redis
 from datetime import datetime
-from importlib import resources
 from typing import List, Dict, Any, Generator
 from fastapi import HTTPException
 from celery.result import AsyncResult
 from sqlalchemy import desc
+from importlib import resources
 
 from ..database import SessionLocal, Experiment
 from azuraforge_worker import celery_app
-from azuraforge_worker.tasks.training_tasks import AVAILABLE_PIPELINES_AND_CONFIGS
 
+# --- YENİ BÖLÜM: Redis'ten Pipeline Bilgisi Alma ---
+
+REDIS_PIPELINES_KEY = "azuraforge:pipelines_catalog"
+
+def get_pipelines_from_redis() -> List[Dict[str, Any]]:
+    """
+    Worker tarafından Redis'e kaydedilmiş olan pipeline kataloğunu okur.
+    Bu, API'ın Worker'ın iç yapısını bilmesini engeller.
+    """
+    try:
+        redis_url = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+        r = redis.from_url(redis_url, decode_responses=True)
+        
+        official_apps_data = []
+        try:
+            with resources.open_text("azuraforge_applications", "official_apps.json") as f:
+                official_apps_data = json.load(f)
+        except (FileNotFoundError, ModuleNotFoundError) as e:
+            print(f"Warning: Could not load official_apps.json: {e}")
+            official_apps_data = []
+        
+        official_apps_map = {app['id']: app for app in official_apps_data}
+
+        pipeline_catalog_raw = r.hgetall(REDIS_PIPELINES_KEY)
+        
+        if not pipeline_catalog_raw:
+            print("Warning: Pipeline catalog not found in Redis. Is the worker running?")
+            return []
+
+        pipelines = []
+        for name, data_str in pipeline_catalog_raw.items():
+            pipeline_data = json.loads(data_str)
+            official_meta = official_apps_map.get(name, {})
+            pipeline_data['name'] = official_meta.get('name', name)
+            pipeline_data['description'] = official_meta.get('description', 'No description available.')
+            pipeline_data['repository'] = official_meta.get('repository', '')
+            pipelines.append(pipeline_data)
+            
+        return sorted(pipelines, key=lambda p: p.get('name', p['id']))
+        
+    except redis.exceptions.ConnectionError as e:
+        print(f"API Critical Error: Could not connect to Redis to get pipelines: {e}")
+        return []
+    except Exception as e:
+        print(f"API Error: An unexpected error occurred while fetching pipelines from Redis: {e}")
+        return []
 
 # --- Helper Fonksiyonlar ---
 
@@ -65,30 +112,21 @@ def _generate_config_combinations(config: Dict[str, Any]) -> Generator[Dict[str,
 # --- API Servis Fonksiyonları ---
 
 def get_available_pipelines() -> List[Dict[str, Any]]:
-    """Yüklü tüm pipeline eklentilerini ve varsayılan konfigürasyon fonksiyonlarını döndürür."""
-    official_apps_data = []
-    try:
-        with resources.open_text("azuraforge_applications", "official_apps.json") as f:
-            official_apps_data = json.load(f)
-    except (FileNotFoundError, ModuleNotFoundError) as e:
-        print(f"Warning: Could not load official_apps.json or azuraforge_applications module: {e}")
-        official_apps_data = []
-    
-    # Sadece keşfedilmiş pipeline'ları listele
-    available_pipelines = [app for app in official_apps_data if app.get("id") in AVAILABLE_PIPELINES_AND_CONFIGS]
-    return available_pipelines
+    """Yüklü tüm pipeline eklentilerini Redis üzerinden keşfederek döndürür."""
+    pipelines = get_pipelines_from_redis()
+    for p in pipelines:
+        p.pop('default_config', None)
+    return pipelines
 
 def get_default_pipeline_config(pipeline_id: str) -> Dict[str, Any]:
-    """Belirli bir pipeline'ın varsayılan konfigürasyonunu döndürür."""
-    pipeline_info = AVAILABLE_PIPELINES_AND_CONFIGS.get(pipeline_id)
-    if not pipeline_info:
-        raise ValueError(f"Pipeline '{pipeline_id}' not found.")
-    
-    get_config_func = pipeline_info.get('get_config_func')
-    if not get_config_func:
-        return {"message": "No specific default configuration available."}
-    return get_config_func()
+    """Belirli bir pipeline'ın Redis'te kayıtlı olan varsayılan konfigürasyonunu döndürür."""
+    pipelines = get_pipelines_from_redis()
+    pipeline_info = next((p for p in pipelines if p['id'] == pipeline_id), None)
 
+    if not pipeline_info:
+        raise ValueError(f"Pipeline '{pipeline_id}' not found in the Redis catalog.")
+    
+    return pipeline_info.get('default_config', {"message": "No specific default configuration available."})
 
 def start_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
     """Yeni bir veya birden fazla deney başlatır (batch)."""
@@ -107,7 +145,6 @@ def start_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
             single_config['batch_id'] = None
             single_config['batch_name'] = None
             
-        # Celery görevini gönder
         task = celery_app.send_task("start_training_pipeline", args=[single_config])
         task_ids.append(task.id)
 
@@ -124,8 +161,6 @@ def list_experiments() -> List[Dict[str, Any]]:
     """
     Veritabanındaki tüm deneylerin özetini VE TAM DETAYLARINI (config, results)
     en yeniden eskiye doğru listeler.
-    Bu fonksiyon, UI'daki genel bakış sayfasının tüm bilgileri tek çağrıda almasını sağlar.
-    Performans iyileştirmesi, Frontend tarafında yapılmalıdır (render optimizasyonları).
     """
     db = SessionLocal()
     try:
@@ -133,6 +168,14 @@ def list_experiments() -> List[Dict[str, Any]]:
         
         all_experiments_data = []
         for exp in experiments_from_db:
+            # Güvenli erişim için bir helper fonksiyon
+            def safe_get(d, keys, default=None):
+                if not isinstance(d, dict): return default
+                for key in keys:
+                    if not isinstance(d, dict) or key not in d: return default
+                    d = d[key]
+                return d
+
             summary = {
                 "experiment_id": exp.id,
                 "task_id": exp.task_id,
@@ -143,19 +186,16 @@ def list_experiments() -> List[Dict[str, Any]]:
                 "failed_at": exp.failed_at.isoformat() if exp.failed_at else None,
                 "batch_id": exp.batch_id,
                 "batch_name": exp.batch_name,
-                # config_summary alanını, full config'den türetelim
                 "config_summary": {
-                    "ticker": exp.config.get("data_sourcing", {}).get("ticker", "N/A") if exp.config else "N/A",
-                    "epochs": exp.config.get("training_params", {}).get("epochs", "N/A") if exp.config else "N/A",
-                    "lr": exp.config.get("training_params", {}).get("lr", "N/A") if exp.config else "N/A",
+                    "ticker": safe_get(exp.config, ["data_sourcing", "ticker"], "N/A"),
+                    "epochs": safe_get(exp.config, ["training_params", "epochs"], "N/A"),
+                    "lr": safe_get(exp.config, ["training_params", "lr"], "N/A"),
                 },
                 "results_summary": {
-                    "final_loss": exp.results.get("final_loss") if exp.results else None,
-                    "r2_score": exp.results.get("metrics", {}).get("r2_score") if exp.results else None,
-                    "mae": exp.results.get("metrics", {}).get("mae") if exp.results else None
+                    "final_loss": safe_get(exp.results, ["final_loss"]),
+                    "r2_score": safe_get(exp.results, ["metrics", "r2_score"]),
+                    "mae": safe_get(exp.results, ["metrics", "mae"]),
                 },
-                # KRİTİK DÜZELTME: Tam config, results ve error objelerini geri ekliyoruz!
-                # Bu, Frontend'deki kaybolan verileri ve grafikleri geri getirecek.
                 "config": exp.config, 
                 "results": exp.results, 
                 "error": exp.error
@@ -173,7 +213,6 @@ def get_experiment_details(experiment_id: str) -> Dict[str, Any]:
         if not exp:
             raise HTTPException(status_code=404, detail=f"Experiment '{experiment_id}' not found.")
         
-        # Bu fonksiyon zaten tam detay dönüyordu, sorun yok.
         return {
             "experiment_id": exp.id, "task_id": exp.task_id, "pipeline_name": exp.pipeline_name,
             "status": exp.status, "config": exp.config, "results": exp.results, "error": exp.error,
