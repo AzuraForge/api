@@ -12,10 +12,6 @@ from sqlalchemy import desc
 
 from ..database import SessionLocal, Experiment
 from azuraforge_worker import celery_app
-# Worker'daki pipeline keşfini kullanmak için import
-# Bu önemli! Worker'ın keşfettiği pipeline'lar burada da API tarafından kullanılabilir olmalı.
-# Bunun için worker pyproject.toml'da `azuraforge-worker`'ı bir bağımlılık olarak gösterir ve
-# worker'ın `__init__.py`'si `celery_app` ve `AVAILABLE_PIPELINES_AND_CONFIGS`'i export eder.
 from azuraforge_worker.tasks.training_tasks import AVAILABLE_PIPELINES_AND_CONFIGS
 
 
@@ -72,11 +68,9 @@ def get_available_pipelines() -> List[Dict[str, Any]]:
     """Yüklü tüm pipeline eklentilerini ve varsayılan konfigürasyon fonksiyonlarını döndürür."""
     official_apps_data = []
     try:
-        # azuraforge_applications paketi içindeki official_apps.json dosyasını oku
         with resources.open_text("azuraforge_applications", "official_apps.json") as f:
             official_apps_data = json.load(f)
     except (FileNotFoundError, ModuleNotFoundError) as e:
-        # Eğer dosya veya modül bulunamazsa, logla ve boş liste dön
         print(f"Warning: Could not load official_apps.json or azuraforge_applications module: {e}")
         official_apps_data = []
     
@@ -128,12 +122,11 @@ def start_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
 
 def list_experiments() -> List[Dict[str, Any]]:
     """
-    Veritabanındaki tüm deneylerin özetini ve tam detaylarını (config, results)
+    Veritabanındaki tüm deneylerin özetini (tam config, results içermeden)
     en yeniden eskiye doğru listeler.
     """
     db = SessionLocal()
     try:
-        # Tüm Experiment objelerini çek
         experiments_from_db = db.query(Experiment).order_by(desc(Experiment.created_at)).all()
         
         all_experiments_data = []
@@ -149,20 +142,22 @@ def list_experiments() -> List[Dict[str, Any]]:
                 "batch_id": exp.batch_id,
                 "batch_name": exp.batch_name,
                 # config_summary alanını, full config'den türetelim
+                # KRİTİK DÜZELTME: config ve results objelerini burada DÖNDÜRMÜYORUZ!
+                # Sadece özet bilgileri döndürüyoruz.
                 "config_summary": {
                     "ticker": exp.config.get("data_sourcing", {}).get("ticker", "N/A") if exp.config else "N/A",
-                    # Epochs ve LR için liste veya tekil değer alabilen uyumlu özet
                     "epochs": exp.config.get("training_params", {}).get("epochs", "N/A") if exp.config else "N/A",
                     "lr": exp.config.get("training_params", {}).get("lr", "N/A") if exp.config else "N/A",
                 },
                 "results_summary": {
                     "final_loss": exp.results.get("final_loss") if exp.results else None,
-                    "r2_score": exp.results.get("metrics", {}).get("r2_score") if exp.results else None
+                    "r2_score": exp.results.get("metrics", {}).get("r2_score") if exp.results else None,
+                    "mae": exp.results.get("metrics", {}).get("mae") if exp.results else None # MAE'yi de ekle
                 },
-                # Tam config, results ve error objelerini doğrudan ekliyoruz!
-                "config": exp.config,
-                "results": exp.results,
-                "error": exp.error
+                # Tam config, results ve error objeleri BURADA DÖNMEMELİ!
+                # "config": exp.config, # <--- KALDIRILDI!
+                # "results": exp.results, # <--- KALDIRILDI!
+                # "error": exp.error # <--- KALDIRILDI!
             }
             all_experiments_data.append(summary)
         return all_experiments_data
@@ -177,8 +172,7 @@ def get_experiment_details(experiment_id: str) -> Dict[str, Any]:
         if not exp:
             raise HTTPException(status_code=404, detail=f"Experiment '{experiment_id}' not found.")
         
-        # Bu fonksiyon da zaten tam detay dönüyordu, ama API'nin list_experiments'i güncellendiği için
-        # UI'da bu fonksiyona gerek kalmayacak. Ancak yine de geriye dönük uyumluluk için burada bırakalım.
+        # Bu fonksiyon zaten tam detay dönüyordu, sorun yok.
         return {
             "experiment_id": exp.id, "task_id": exp.task_id, "pipeline_name": exp.pipeline_name,
             "status": exp.status, "config": exp.config, "results": exp.results, "error": exp.error,
@@ -192,6 +186,5 @@ def get_experiment_details(experiment_id: str) -> Dict[str, Any]:
 
 def get_task_status(task_id: str) -> Dict[str, Any]:
     """Belirli bir Celery görevinin anlık durumunu döndürür (Celery'den doğrudan sorgu)."""
-    # Bu fonksiyon da UI'da artık kullanılmayacak, çünkü task_progress doğrudan WebSocket'ten geliyor
     task_result = AsyncResult(task_id, app=celery_app)
     return {"status": task_result.state, "details": task_result.info}
