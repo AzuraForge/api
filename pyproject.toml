@@ -20,8 +20,9 @@ dependencies = [
     "pyyaml",
     "redis",
     "python-semantic-release",
-    "passlib[bcrypt]", # <-- YENİ: Parola hashleme için
-    "python-jose[cryptography]" # <-- YENİ: JWT işlemleri için
+    "passlib[bcrypt]",
+    "python-jose[cryptography]",
+    "python-multipart" # <-- EKSİK OLAN KRİTİK BAĞIMLILIK EKLENDİ
 ]
 
 [project.scripts]
