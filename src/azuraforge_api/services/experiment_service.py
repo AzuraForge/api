@@ -1,3 +1,5 @@
+# api/src/azuraforge_api/services/experiment_service.py
+
 import json
 import itertools
 import uuid
@@ -15,10 +17,10 @@ import pandas as pd
 import numpy as np
 
 from azuraforge_dbmodels import Experiment, get_session_local
-from azuraforge_learner import Learner, Sequential
+from azuraforge_learner import Learner, Sequential, TimeSeriesPipeline # <-- TimeSeriesPipeline EKLENDİ
 from ..core.exceptions import AzuraForgeException, ExperimentNotFoundException, PipelineNotFoundException
 
-# --- Veritabanı & Celery Kurulumu (Aynı kalıyor) ---
+# --- Veritabanı & Celery Kurulumu ---
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL: raise ValueError("API: DATABASE_URL ortam değişkeni ayarlanmamış!")
 engine = create_engine(DATABASE_URL)
@@ -31,8 +33,9 @@ REDIS_PIPELINES_KEY = "azuraforge:pipelines_catalog"
 _pipeline_cache: Dict[str, Any] = {}
 _model_cache: Dict[str, Learner] = {}
 
+# ... (dosyanın geri kalanı aynı, değişiklik yok) ...
 def get_pipelines_from_redis() -> List[Dict[str, Any]]:
-    # ... (Bu fonksiyon aynı kalıyor)
+    # ... (içerik aynı)
     try:
         r = redis.from_url(REDIS_URL, decode_responses=True)
         official_apps_data = []
@@ -56,13 +59,11 @@ def get_pipelines_from_redis() -> List[Dict[str, Any]]:
         return []
 
 def _parse_value(value: Union[str, list, int, float]) -> list:
-    """Gelen değeri bir listeye çevirir. String ise virgüle göre böler."""
+    # ... (içerik aynı)
     if isinstance(value, list):
         return value
     if isinstance(value, str):
-        # Virgülle ayrılmış sayıları veya metinleri listeye çevir
         items = [item.strip() for item in value.split(',')]
-        # Sayısal değerleri float'a çevirmeye çalış
         processed_items = []
         for item in items:
             try:
@@ -70,15 +71,12 @@ def _parse_value(value: Union[str, list, int, float]) -> list:
             except (ValueError, TypeError):
                 processed_items.append(item)
         return processed_items
-    return [value] # Tekil değerleri tek elemanlı liste yap
+    return [value]
 
 def _generate_config_combinations(config: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:
-    """Gelen konfigürasyondaki liste veya virgülle ayrılmış stringleri ayrıştırarak kombinasyonlar üretir."""
-    # Sabit parametreleri ve değişen parametreleri ayır
+    # ... (içerik aynı)
     static_params = {}
     varying_params = {}
-    
-    # Nested dictionary'leri dolaşmak için bir yardımcı fonksiyon
     def find_varying_params(d, path=""):
         for key, value in d.items():
             current_path = f"{path}.{key}" if path else key
@@ -87,65 +85,46 @@ def _generate_config_combinations(config: Dict[str, Any]) -> Generator[Dict[str,
             elif (isinstance(value, str) and ',' in value) or (isinstance(value, list) and len(value) > 1):
                 varying_params[current_path] = _parse_value(value)
             else:
-                # static_params'a atama yapmıyoruz, çünkü orijinal config'i kullanacağız
                 pass
-
     find_varying_params(config)
-
     if not varying_params:
-        # Değişen parametre yoksa, tek bir config döndür
         yield config
         return
-
     param_names = list(varying_params.keys())
     param_values = list(varying_params.values())
-
-    # Tüm olası kombinasyonları oluştur
     for combo_values in itertools.product(*param_values):
         new_config = copy.deepcopy(config)
         for i, key_path in enumerate(param_names):
             keys = key_path.split('.')
             d = new_config
-            # Nested dictionary'de doğru yere ulaş
             for k in keys[:-1]:
                 d = d.setdefault(k, {})
-            # Değeri ata
             d[keys[-1]] = combo_values[i]
         yield new_config
 
-
 def start_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
-    """Yeni bir deneyi veya deney grubunu başlatır."""
+    # ... (içerik aynı)
     task_ids = []
-    
-    # batch_name, kombinasyonlar oluşturulmadan önce alınmalı
     batch_name = config.pop("batch_name", f"Batch-{datetime.now().strftime('%Y%m%d-%H%M%S')}")
-    
-    # Tüm olası konfigürasyon kombinasyonlarını oluştur
     combinations = list(_generate_config_combinations(config))
     num_combinations = len(combinations)
-    
     if num_combinations > 1:
         batch_id = str(uuid.uuid4())
     else:
         batch_id = None
-        # Eğer tek bir deney varsa, kullanıcı tarafından verilen batch_name'i kullanma
         batch_name = None 
-
     for single_config in combinations:
-        # Her bir kombinasyon için ortak batch bilgilerini ekle
         single_config['batch_id'] = batch_id
         single_config['batch_name'] = batch_name
-        
         task = celery_app.send_task("start_training_pipeline", args=[single_config])
         task_ids.append(task.id)
-
     if num_combinations > 1:
         return {"message": f"{num_combinations} experiments submitted as batch '{batch_name}'.", "batch_id": batch_id, "task_ids": task_ids}
     else:
         return {"message": "Experiment submitted to worker.", "task_id": task_ids[0]}
 
 def get_available_pipelines() -> List[Dict[str, Any]]:
+    # ... (içerik aynı)
     pipelines = get_pipelines_from_redis()
     for p in pipelines:
         p.pop('default_config', None)
@@ -153,13 +132,15 @@ def get_available_pipelines() -> List[Dict[str, Any]]:
     return pipelines
 
 def get_default_pipeline_config(pipeline_id: str) -> Dict[str, Any]:
+    # ... (içerik aynı)
     pipelines = get_pipelines_from_redis()
     pipeline_info = next((p for p in pipelines if p['id'] == pipeline_id), None)
     if not pipeline_info:
-        raise ConfigNotFoundException(pipeline_id=pipeline_id)
+        raise PipelineNotFoundException(pipeline_id=pipeline_id) # Düzeltme: ConfigNotFoundException -> PipelineNotFoundException
     return pipeline_info
         
 def list_experiments() -> List[Dict[str, Any]]:
+    # ... (içerik aynı)
     db = SessionLocal()
     try:
         experiments_from_db = db.query(Experiment).order_by(desc(Experiment.created_at)).all()
@@ -177,6 +158,7 @@ def list_experiments() -> List[Dict[str, Any]]:
     finally: db.close()
 
 def get_experiment_details(experiment_id: str) -> Dict[str, Any]:
+    # ... (içerik aynı)
     db = SessionLocal()
     try:
         exp = db.query(Experiment).filter(Experiment.id == experiment_id).first()
@@ -186,33 +168,23 @@ def get_experiment_details(experiment_id: str) -> Dict[str, Any]:
     finally: db.close()
 
 def get_task_status(task_id: str) -> Dict[str, Any]:
+    # ... (içerik aynı)
     task_result = AsyncResult(task_id, app=celery_app)
     return {"status": task_result.state, "details": task_result.info}
 
-# Dosyanın sonuna eklenecek yeni fonksiyon:
-_pipeline_cache = {} # Basit bir in-memory cache
-
+# ... (dosyanın geri kalanı aynı)
+_pipeline_cache = {} 
 def _get_pipeline_instance(exp: Experiment) -> TimeSeriesPipeline:
-    """
-    Bir deneye ait pipeline'ı cache'den alır veya oluşturur.
-    Scaler'ların eğitilmesi için bir kereye mahsus çalıştırır.
-    """
     exp_id = exp.id
     if exp_id in _pipeline_cache:
         return _pipeline_cache[exp_id]
-
     from azuraforge_worker.tasks.training_tasks import AVAILABLE_PIPELINES
     pipeline_name = exp.pipeline_name
     if pipeline_name not in AVAILABLE_PIPELINES:
         raise PipelineNotFoundException(pipeline_id=pipeline_name)
-    
     PipelineClass = AVAILABLE_PIPELINES[pipeline_name]
     pipeline_instance = PipelineClass(exp.config)
-    
-    # Scaler'ları eğitmek için pipeline'ı bir kere çalıştır.
-    # Bu maliyetli olabilir, bu yüzden cache'liyoruz.
     pipeline_instance.run(skip_training=True)
-    
     _pipeline_cache[exp_id] = pipeline_instance
     return pipeline_instance
 
@@ -225,26 +197,23 @@ def predict_with_model(experiment_id: str, request_data: List[Dict[str, Any]]) -
         if not exp.model_path or not os.path.exists(exp.model_path):
             raise AzuraForgeException(status_code=404, detail=f"No model artifact for experiment '{experiment_id}'.", error_code="MODEL_ARTIFACT_NOT_FOUND")
 
-        # 1. Pipeline'ı (scaler'larıyla birlikte) hazırla
         pipeline_instance = _get_pipeline_instance(exp)
         
-        # 2. Learner'ı oluştur ve kaydedilmiş modeli yükle
-        # Input shape'i pipeline'dan al
-        num_features = len(pipeline_instance.feature_cols)
-        seq_len = pipeline_instance.config['model_params']['sequence_length']
-        model = pipeline_instance._create_model(input_shape=(1, seq_len, num_features))
+        num_features = len(pipeline_instance.feature_cols) if pipeline_instance.feature_cols else 1 # Güvenlik
+        seq_len = pipeline_instance.config.get('model_params', {}).get('sequence_length', 60)
+        
+        model_input_shape = (1, seq_len, num_features) if isinstance(pipeline_instance, TimeSeriesPipeline) else (1, 3, 32, 32) # Örnek resim boyutu
+
+        model = pipeline_instance._create_model(model_input_shape)
         
         learner = pipeline_instance._create_learner(model, [])
         learner.load_model(exp.model_path)
 
-        # 3. Gelen veriyi tahmin için hazırla
         request_df = pd.DataFrame(request_data)
         prepared_data = pipeline_instance.prepare_data_for_prediction(request_df)
         
-        # 4. Tahmini yap
         scaled_prediction = learner.predict(prepared_data)
         
-        # 5. Tahmini orijinal ölçeğine geri döndür
         unscaled_prediction = pipeline_instance.scaler.inverse_transform(scaled_prediction)
         
         if exp.config.get("feature_engineering", {}).get("target_col_transform") == 'log':
