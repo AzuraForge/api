@@ -6,13 +6,13 @@ import redis
 import copy
 from datetime import datetime
 from typing import List, Dict, Any, Generator
-from fastapi import HTTPException
 from sqlalchemy import create_engine, desc
 from celery import Celery
 from celery.result import AsyncResult
 from importlib import resources
 
 from azuraforge_dbmodels import Experiment, get_session_local
+from ..core.exceptions import ConfigNotFoundException, ExperimentNotFoundException, PipelineNotFoundException
 
 # --- Veritabanı Kurulumu ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -92,7 +92,7 @@ def get_default_pipeline_config(pipeline_id: str) -> Dict[str, Any]:
     pipelines = get_pipelines_from_redis()
     pipeline_info = next((p for p in pipelines if p['id'] == pipeline_id), None)
     if not pipeline_info:
-        raise ValueError(f"Pipeline '{pipeline_id}' not found in the Redis catalog.")
+        raise ConfigNotFoundException(pipeline_id=pipeline_id)
     return pipeline_info
 
 def start_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
@@ -119,7 +119,6 @@ def list_experiments() -> List[Dict[str, Any]]:
     db = SessionLocal()
     try:
         experiments_from_db = db.query(Experiment).order_by(desc(Experiment.created_at)).all()
-        # ... (bu fonksiyonun geri kalanı aynı kalabilir, sadece Experiment modelini import etmesi gerekiyordu, o da halledildi)
         all_experiments_data = []
         for exp in experiments_from_db:
             def safe_get(d, keys, default=None):
@@ -137,7 +136,8 @@ def get_experiment_details(experiment_id: str) -> Dict[str, Any]:
     db = SessionLocal()
     try:
         exp = db.query(Experiment).filter(Experiment.id == experiment_id).first()
-        if not exp: raise HTTPException(status_code=404, detail=f"Experiment '{experiment_id}' not found.")
+        if not exp:
+            raise ExperimentNotFoundException(experiment_id=experiment_id)
         return { "experiment_id": exp.id, "task_id": exp.task_id, "pipeline_name": exp.pipeline_name, "status": exp.status, "config": exp.config, "results": exp.results, "error": exp.error, "created_at": exp.created_at.isoformat() if exp.created_at else None, "completed_at": exp.completed_at.isoformat() if exp.completed_at else None, "failed_at": exp.failed_at.isoformat() if exp.failed_at else None, "batch_id": exp.batch_id, "batch_name": exp.batch_name, }
     finally: db.close()
 

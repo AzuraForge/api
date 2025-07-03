@@ -1,6 +1,7 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from typing import List, Dict, Any
 from ..services import experiment_service
+from ..core.exceptions import ConfigNotFoundException
 
 router = APIRouter(tags=["Pipelines"])
 
@@ -12,5 +13,5 @@ def get_all_available_pipelines():
 def get_pipeline_default_config(pipeline_id: str):
     try:
         return experiment_service.get_default_pipeline_config(pipeline_id)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except ConfigNotFoundException as e:
+        raise e
