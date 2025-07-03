@@ -1,17 +1,29 @@
+# api/src/azuraforge_api/main.py
 import uvicorn
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from .core.config import settings
-from .routes import experiments, pipelines, streaming
+from .routes import experiments, pipelines, streaming, auth # <-- auth eklendi
 from azuraforge_dbmodels import init_db
+from .services import user_service # <-- user_service eklendi
+from .database import SessionLocal # <-- SessionLocal eklendi
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("API: Veritabanı tabloları kontrol ediliyor/oluşturuluyor...")
     init_db()
     print("API: Veritabanı hazır.")
+    
+    # === YENİ BÖLÜM: Varsayılan kullanıcı oluşturma ===
+    db = SessionLocal()
+    try:
+        user_service.create_default_user_if_not_exists(db)
+    finally:
+        db.close()
+    # === BİTTİ ===
+
     yield
 
 def create_app() -> FastAPI:
@@ -37,6 +49,7 @@ def create_app() -> FastAPI:
     )
 
     api_router = APIRouter()
+    api_router.include_router(auth.router) # <-- auth router eklendi
     api_router.include_router(experiments.router)
     api_router.include_router(pipelines.router)
     

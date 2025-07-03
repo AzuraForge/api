@@ -1,5 +1,29 @@
-from pydantic import BaseModel
-from typing import List, Dict, Any
+# api/src/azuraforge_api/schemas.py
+from pydantic import BaseModel, Field
+from typing import List, Dict, Any, Optional
+
+# === YENİ BÖLÜM: Kullanıcı ve Token Şemaları ===
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+
+class UserBase(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+
+class UserCreate(UserBase):
+    password: str = Field(..., min_length=8)
+
+class UserInDB(UserBase):
+    id: str
+    hashed_password: str
+    
+    class Config:
+        from_attributes = True
+# === BİTTİ ===
+
 
 class PredictionRequest(BaseModel):
     """
