@@ -9,26 +9,28 @@ Bu servis, AzuraForge platformunun merkezi iletişim katmanı ve dış dünyaya 
     *   Gelen istekleri doğrular ve işlenmesi için görevleri `Celery` kuyruğuna (Redis) iletir.
 
 2.  **WebSocket Sunucusu:**
-    *   Devam eden deneylerin durumunu canlı olarak takip etmek için (`/ws/task_status/{task_id}`) WebSocket bağlantıları sunar.
+    *   Devam eden deneylerin durumunu (`/ws/task_status/{task_id}`) canlı olarak takip etmek için WebSocket bağlantıları sunar.
 
 3.  **Redis Pub/Sub Dinleyicisi:**
     *   `Worker` tarafından yayınlanan ilerleme mesajlarını (`task-progress:*` kanalları) dinler ve bu mesajları ilgili WebSocket istemcisine anında iletir.
 
+---
+
+## 🏛️ Ekosistemdeki Yeri
+
+Bu servis, AzuraForge ekosisteminin bir parçasıdır. Projenin genel mimarisini, vizyonunu ve geliştirme rehberini anlamak için lütfen ana **[AzuraForge Platform Dokümantasyonuna](https://github.com/AzuraForge/platform/tree/main/docs)** başvurun.
+
+---
+
 ## 🛠️ Yerel Geliştirme ve Test
 
-Bu servisi yerel ortamda çalıştırmak ve test etmek için, ana `platform` reposundaki **[Geliştirme Rehberi](../../platform/docs/DEVELOPMENT_GUIDE.md)**'ni takip edin.
+Bu servisi yerel ortamda çalıştırmak ve test etmek için, ana `platform` reposundaki **[Geliştirme Rehberi](https://github.com/AzuraForge/platform/blob/main/docs/DEVELOPMENT_GUIDE.md)**'ni takip ederek genel ortamı kurun.
 
-Servis bağımlılıkları kurulduktan ve sanal ortam aktive edildikten sonra, aşağıdaki komutla API sunucusunu başlatabilirsiniz:
+Sanal ortam aktive edildikten sonra, bu repo dizinindeyken aşağıdaki komutla API sunucusunu başlatabilirsiniz:
 
 ```bash
 # api/ kök dizinindeyken
 start-api
 ```
 
-Sunucu `http://localhost:8000` adresinde çalışmaya başlayacaktır.
-
-**Birim Testleri (Yakında):**
-Birim testlerini çalıştırmak için:
-```bash
-pytest
-```
+Sunucu `http://localhost:8000` adresinde çalışmaya başlayacaktır. Birim testlerini çalıştırmak için `pytest` komutunu kullanın.
