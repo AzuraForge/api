@@ -12,7 +12,9 @@ from celery.result import AsyncResult
 from importlib import resources
 
 from azuraforge_dbmodels import Experiment, get_session_local
-from ..core.exceptions import ConfigNotFoundException, ExperimentNotFoundException, PipelineNotFoundException
+from azuraforge_learner.pipelines import TimeSeriesPipeline
+from azuraforge_learner import Learner, Sequential, Linear, LSTM, Adam, SGD, MSELoss
+from ..core.exceptions import AzuraForgeException, ExperimentNotFoundException, PipelineNotFoundException
 
 # --- Veritabanı Kurulumu ---
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -144,3 +146,73 @@ def get_experiment_details(experiment_id: str) -> Dict[str, Any]:
 def get_task_status(task_id: str) -> Dict[str, Any]:
     task_result = AsyncResult(task_id, app=celery_app)
     return {"status": task_result.state, "details": task_result.info}
+
+# Dosyanın sonuna eklenecek yeni fonksiyon:
+_pipeline_cache = {} # Basit bir in-memory cache
+
+def _get_pipeline_instance(exp: Experiment) -> TimeSeriesPipeline:
+    """
+    Bir deneye ait pipeline'ı cache'den alır veya oluşturur.
+    Scaler'ların eğitilmesi için bir kereye mahsus çalıştırır.
+    """
+    exp_id = exp.id
+    if exp_id in _pipeline_cache:
+        return _pipeline_cache[exp_id]
+
+    from azuraforge_worker.tasks.training_tasks import AVAILABLE_PIPELINES
+    pipeline_name = exp.pipeline_name
+    if pipeline_name not in AVAILABLE_PIPELINES:
+        raise PipelineNotFoundException(pipeline_id=pipeline_name)
+    
+    PipelineClass = AVAILABLE_PIPELINES[pipeline_name]
+    pipeline_instance = PipelineClass(exp.config)
+    
+    # Scaler'ları eğitmek için pipeline'ı bir kere çalıştır.
+    # Bu maliyetli olabilir, bu yüzden cache'liyoruz.
+    pipeline_instance.run(skip_training=True)
+    
+    _pipeline_cache[exp_id] = pipeline_instance
+    return pipeline_instance
+
+def predict_with_model(experiment_id: str, request_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+    db = SessionLocal()
+    try:
+        exp = db.query(Experiment).filter(Experiment.id == experiment_id).first()
+        if not exp:
+            raise ExperimentNotFoundException(experiment_id=experiment_id)
+        if not exp.model_path or not os.path.exists(exp.model_path):
+            raise AzuraForgeException(status_code=404, detail=f"No model artifact for experiment '{experiment_id}'.", error_code="MODEL_ARTIFACT_NOT_FOUND")
+
+        # 1. Pipeline'ı (scaler'larıyla birlikte) hazırla
+        pipeline_instance = _get_pipeline_instance(exp)
+        
+        # 2. Learner'ı oluştur ve kaydedilmiş modeli yükle
+        # Input shape'i pipeline'dan al
+        num_features = len(pipeline_instance.feature_cols)
+        seq_len = pipeline_instance.config['model_params']['sequence_length']
+        model = pipeline_instance._create_model(input_shape=(1, seq_len, num_features))
+        
+        learner = pipeline_instance._create_learner(model, [])
+        learner.load_model(exp.model_path)
+
+        # 3. Gelen veriyi tahmin için hazırla
+        request_df = pd.DataFrame(request_data)
+        prepared_data = pipeline_instance.prepare_data_for_prediction(request_df)
+        
+        # 4. Tahmini yap
+        scaled_prediction = learner.predict(prepared_data)
+        
+        # 5. Tahmini orijinal ölçeğine geri döndür
+        unscaled_prediction = pipeline_instance.scaler.inverse_transform(scaled_prediction)
+        
+        if exp.config.get("feature_engineering", {}).get("target_col_transform") == 'log':
+            final_prediction = np.expm1(unscaled_prediction)
+        else:
+            final_prediction = unscaled_prediction
+
+        return {
+            "prediction": final_prediction.flatten()[0],
+            "experiment_id": experiment_id,
+        }
+    finally:
+        db.close()
