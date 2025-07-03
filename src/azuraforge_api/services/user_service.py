@@ -1,49 +1,59 @@
-# api/src/azuraforge_api/services/user_service.py
+# api/src/azuraforge_api/core/security.py
 
-from sqlalchemy.orm import Session
-from azuraforge_dbmodels import User
-from ..schemas import UserCreate
-from ..core.security import get_password_hash, verify_password
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 
-def get_user_by_username(db: Session, username: str) -> User | None:
-    """Verilen kullanıcı adına göre kullanıcıyı bulur."""
-    return db.query(User).filter(User.username == username).first()
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
+from pydantic import BaseModel
 
-def create_user(db: Session, user: UserCreate) -> User:
-    """Yeni bir kullanıcı oluşturur."""
-    hashed_password = get_password_hash(user.password)
-    db_user = User(username=user.username, hashed_password=hashed_password)
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    return db_user
+from .config import settings
+from ..services import user_service
+from ..database import SessionLocal 
 
-def authenticate_user(db: Session, username: str, password: str) -> User | None:
-    """Kullanıcıyı doğrular."""
-    user = get_user_by_username(db, username)
-    if not user:
-        return None
-    if not verify_password(password, user.hashed_password):
-        return None
-    return user
+# DİKKAT: Artık parola fonksiyonlarını buradan import ETMİYORUZ.
+# Onlar user_service içinde doğrudan password.py'den import edilecek.
 
-def create_default_user_if_not_exists(db: Session):
+# --- OAuth2 Şeması ---
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_PREFIX}/auth/token")
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+
+def create_access_token(data: dict) -> str:
+    """Yeni bir JWT oluşturur."""
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return encoded_jwt
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
     """
-    Eğer sistemde hiç kullanıcı yoksa, varsayılan bir kullanıcı oluşturur.
-    Bu, ilk kurulum için kullanışlıdır.
+    Token'ı doğrular ve mevcut kullanıcıyı döndürür.
+    Bu, korunmuş endpoint'lerde bir bağımlılık (dependency) olarak kullanılacak.
     """
-    print("API: Varsayılan kullanıcı kontrol ediliyor...")
-    if db.query(User).count() == 0:
-        default_username = "admin"
-        default_password = "DefaultPassword123!" # Güçlü bir varsayılan şifre
-        
-        print(f"API: Hiç kullanıcı bulunamadı. '{default_username}' kullanıcısı oluşturuluyor.")
-        print(f"API: UYARI! Lütfen ilk girişten sonra bu şifreyi değiştirin.")
-        print(f"API: Kullanıcı Adı: {default_username}")
-        print(f"API: Şifre: {default_password}")
-
-        user_in = UserCreate(username=default_username, password=default_password)
-        create_user(db, user_in)
-        print("API: Varsayılan kullanıcı başarıyla oluşturuldu.")
-    else:
-        print("API: Mevcut kullanıcılar bulundu, yeni kullanıcı oluşturulmadı.")
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+        token_data = TokenData(username=username)
+    except JWTError:
+        raise credentials_exception
+    
+    # Veritabanından kullanıcıyı al
+    db = SessionLocal()
+    try:
+        user = user_service.get_user_by_username(db, username=token_data.username)
+        if user is None:
+            raise credentials_exception
+        return user
+    finally:
+        db.close()

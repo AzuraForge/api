@@ -6,30 +6,20 @@ from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from pydantic import BaseModel
 
 from .config import settings
 from ..services import user_service
-from ..database import SessionLocal # Veritabanı bağlantısı için
+from ..database import SessionLocal 
 
-# --- Parola Hashleme ---
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# DİKKAT: Artık parola fonksiyonlarını buradan import ETMİYORUZ.
+# Onlar user_service içinde doğrudan password.py'den import edilecek.
 
 # --- OAuth2 Şeması ---
-# `tokenUrl` tam olarak login endpoint'ine işaret etmeli
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_PREFIX}/auth/token")
 
 class TokenData(BaseModel):
     username: Optional[str] = None
-
-def get_password_hash(password: str) -> str:
-    """Verilen parolayı hash'ler."""
-    return pwd_context.hash(password)
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Parolayı hash ile karşılaştırır."""
-    return pwd_context.verify(plain_password, hashed_password)
 
 def create_access_token(data: dict) -> str:
     """Yeni bir JWT oluşturur."""
