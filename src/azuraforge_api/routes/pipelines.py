@@ -1,7 +1,11 @@
+# Bu dosya doğru. Sadece kontrol amaçlı buraya ekliyorum.
+# get_pipeline_default_config fonksiyonu ConfigNotFoundException'ı bekliyor.
+# Yaptığımız düzeltme ile bu beklentiyi karşılamış olduk.
+
 from fastapi import APIRouter
 from typing import List, Dict, Any
 from ..services import experiment_service
-from ..core.exceptions import ConfigNotFoundException
+from ..core.exceptions import ConfigNotFoundException # <-- BU HATA YAKALANIYOR
 
 router = APIRouter(tags=["Pipelines"])
 
@@ -13,5 +17,5 @@ def get_all_available_pipelines():
 def get_pipeline_default_config(pipeline_id: str):
     try:
         return experiment_service.get_default_pipeline_config(pipeline_id)
-    except ConfigNotFoundException as e:
+    except ConfigNotFoundException as e: # <-- BURADA YAKALANIYOR
         raise e

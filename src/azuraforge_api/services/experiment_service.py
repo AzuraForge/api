@@ -18,7 +18,7 @@ import numpy as np
 
 from azuraforge_dbmodels import Experiment, get_session_local
 from azuraforge_learner import Learner, Sequential, TimeSeriesPipeline # <-- TimeSeriesPipeline EKLENDİ
-from ..core.exceptions import AzuraForgeException, ExperimentNotFoundException, PipelineNotFoundException, ConfigNotFoundException # <-- ConfigNotFoundException eklendi
+from ..core.exceptions import AzuraForgeException, ExperimentNotFoundException, PipelineNotFoundException, ConfigNotFoundException
 # --- Veritabanı & Celery Kurulumu ---
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL: raise ValueError("API: DATABASE_URL ortam değişkeni ayarlanmamış!")
@@ -131,12 +131,11 @@ def get_available_pipelines() -> List[Dict[str, Any]]:
     return pipelines
 
 def get_default_pipeline_config(pipeline_id: str) -> Dict[str, Any]:
-    # ... (içerik aynı)
     pipelines = get_pipelines_from_redis()
     pipeline_info = next((p for p in pipelines if p['id'] == pipeline_id), None)
     if not pipeline_info:
         # DÜZELTME: Bu endpoint'in amacı config bulmak olduğu için,
-        # bu hatayı fırlatması daha mantıklı.
+        # bu hatayı fırlatması daha mantıklı. routes/pipelines.py bunu bekliyor.
         raise ConfigNotFoundException(pipeline_id=pipeline_id)
     return pipeline_info
         
