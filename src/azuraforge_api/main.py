@@ -1,5 +1,3 @@
-# api/src/azuraforge_api/main.py
-
 import uvicorn
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,13 +5,7 @@ from contextlib import asynccontextmanager
 
 from .core.config import settings
 from .routes import experiments, pipelines, streaming
-# === DEĞİŞİKLİK BURADA: Kendi veritabanı modülümüzden import ediyoruz ===
-from .database import Base, engine 
-# === DEĞİŞİKLİK SONU ===
-
-def init_db():
-    """Veritabanı tablolarını oluşturur."""
-    Base.metadata.create_all(bind=engine)
+from azuraforge_dbmodels import init_db
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -27,7 +19,6 @@ def create_app() -> FastAPI:
         title=settings.PROJECT_NAME, 
         version="0.1.0",
         lifespan=lifespan,
-        # DÜZELTME: docs_url ve redoc_url'i API prefix'i altına taşıyoruz
         docs_url=f"{settings.API_V1_PREFIX}/docs",
         redoc_url=f"{settings.API_V1_PREFIX}/redoc"
     )

@@ -1,5 +1,3 @@
-# api/src/azuraforge_api/services/experiment_service.py
-
 import json
 import itertools
 import uuid
@@ -9,20 +7,30 @@ import copy
 from datetime import datetime
 from typing import List, Dict, Any, Generator
 from fastapi import HTTPException
+from sqlalchemy import create_engine, desc
+from celery import Celery
 from celery.result import AsyncResult
-from sqlalchemy import desc
 from importlib import resources
 
-from ..database import SessionLocal, Experiment
-from azuraforge_worker import celery_app
+from azuraforge_dbmodels import Experiment, get_session_local
+
+# --- Veritabanı Kurulumu ---
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError("API: DATABASE_URL ortam değişkeni ayarlanmamış!")
+engine = create_engine(DATABASE_URL)
+SessionLocal = get_session_local(engine)
+
+# --- Celery Kurulumu ---
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+celery_app = Celery("azuraforge_tasks", broker=REDIS_URL, backend=REDIS_URL)
 
 # --- Redis'ten Pipeline Bilgisi Alma ---
 REDIS_PIPELINES_KEY = "azuraforge:pipelines_catalog"
 
 def get_pipelines_from_redis() -> List[Dict[str, Any]]:
     try:
-        redis_url = os.environ.get("REDIS_URL", "redis://redis:6379/0")
-        r = redis.from_url(redis_url, decode_responses=True)
+        r = redis.from_url(REDIS_URL, decode_responses=True)
         
         official_apps_data = []
         try:
@@ -41,9 +49,6 @@ def get_pipelines_from_redis() -> List[Dict[str, Any]]:
             pipeline_data = json.loads(data_str)
             official_meta = official_apps_map.get(name, {})
             
-            # === DÜZELTME BURADA: Var olan anahtarları ezme ===
-            # Sadece pipeline_data'da olmayan anahtarları official_meta'dan ekle.
-            # Bu, Redis'ten gelen 'form_schema' ve 'default_config'in korunmasını sağlar.
             for key, value in official_meta.items():
                 if key not in pipeline_data:
                     pipeline_data[key] = value
@@ -56,8 +61,6 @@ def get_pipelines_from_redis() -> List[Dict[str, Any]]:
         print(f"API Error fetching pipelines from Redis: {e}")
         return []
 
-# ... (dosyanın geri kalanı önceki mesajdakiyle TAMAMEN AYNI, değişiklik yok) ...
-# Tamlık adına fonksiyonları tekrar ekliyorum.
 def _generate_config_combinations(config: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:
     batch_params = config.pop("batch_params", None)
     if not batch_params or not isinstance(batch_params, dict):
@@ -116,6 +119,7 @@ def list_experiments() -> List[Dict[str, Any]]:
     db = SessionLocal()
     try:
         experiments_from_db = db.query(Experiment).order_by(desc(Experiment.created_at)).all()
+        # ... (bu fonksiyonun geri kalanı aynı kalabilir, sadece Experiment modelini import etmesi gerekiyordu, o da halledildi)
         all_experiments_data = []
         for exp in experiments_from_db:
             def safe_get(d, keys, default=None):

@@ -1,28 +1,24 @@
-# api/pyproject.toml
-
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "azuraforge-api"
-version = "0.1.1"
+version = "0.1.2" # Versiyonu artırdık
 description = "The API server for the AzuraForge Platform."
 requires-python = ">=3.10"
 
 dependencies = [
     "azuraforge-learner @ git+https://github.com/AzuraForge/learner.git@main",
-    "azuraforge-worker @ git+https://github.com/AzuraForge/worker.git@main",
     "azuraforge-applications @ git+https://github.com/AzuraForge/applications.git@main",
-     "azuraforge-dbmodels @ git+https://github.com/AzuraForge/dbmodels.git@main",
+    "azuraforge-dbmodels @ git+https://github.com/AzuraForge/dbmodels.git@main",
+    "celery[redis]",
     "fastapi",
     "uvicorn[standard]",
     "pydantic-settings",
     "python-dotenv",
     "pyyaml",
     "redis",
-    "SQLAlchemy",
-    "psycopg2-binary",
     "python-semantic-release"
 ]
 
