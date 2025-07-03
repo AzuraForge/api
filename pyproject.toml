@@ -14,6 +14,7 @@ dependencies = [
     "azuraforge-learner @ git+https://github.com/AzuraForge/learner.git@main",
     "azuraforge-worker @ git+https://github.com/AzuraForge/worker.git@main",
     "azuraforge-applications @ git+https://github.com/AzuraForge/applications.git@main",
+     "azuraforge-dbmodels @ git+https://github.com/AzuraForge/dbmodels.git@main",
     "fastapi",
     "uvicorn[standard]",
     "pydantic-settings",
