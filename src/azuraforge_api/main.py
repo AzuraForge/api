@@ -1,14 +1,15 @@
 # api/src/azuraforge_api/main.py
-import uvicorn
+
+# uvicorn'u artık buradan import etmeye gerek yok
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from .core.config import settings
-from .routes import experiments, pipelines, streaming, auth # <-- auth eklendi
+from .routes import experiments, pipelines, streaming, auth
 from azuraforge_dbmodels import init_db
-from .services import user_service # <-- user_service eklendi
-from .database import SessionLocal # <-- SessionLocal eklendi
+from .services import user_service
+from .database import SessionLocal
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -16,14 +17,13 @@ async def lifespan(app: FastAPI):
     init_db()
     print("API: Veritabanı hazır.")
     
-    # === YENİ BÖLÜM: Varsayılan kullanıcı oluşturma ===
     db = SessionLocal()
     try:
         user_service.create_default_user_if_not_exists(db)
     finally:
         db.close()
-    # === BİTTİ ===
-
+    
+    print("API: Uygulama başlangıcı tamamlandı. İstekler kabul ediliyor.")
     yield
 
 def create_app() -> FastAPI:
@@ -49,7 +49,7 @@ def create_app() -> FastAPI:
     )
 
     api_router = APIRouter()
-    api_router.include_router(auth.router) # <-- auth router eklendi
+    api_router.include_router(auth.router)
     api_router.include_router(experiments.router)
     api_router.include_router(pipelines.router)
     
@@ -64,6 +64,7 @@ def create_app() -> FastAPI:
 
 app = create_app()
 
-def run_server():
-    print(f"🚀 Starting {settings.PROJECT_NAME}...")
-    uvicorn.run("azuraforge_api.main:app", host="0.0.0.0", port=8000, reload=True)
+# === KALDIRILDI: Bu fonksiyon artık docker-compose command tarafından doğrudan çağrıldığı için gereksiz ===
+# def run_server():
+#     print(f"🚀 Starting {settings.PROJECT_NAME}...")
+#     uvicorn.run("azuraforge_api.main:app", host="0.0.0.0", port=8000, reload=True)

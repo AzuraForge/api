@@ -22,11 +22,12 @@ dependencies = [
     "python-semantic-release",
     "passlib[bcrypt]",
     "python-jose[cryptography]",
-    "python-multipart" # <-- EKSİK OLAN KRİTİK BAĞIMLILIK EKLENDİ
+    "python-multipart"
 ]
 
-[project.scripts]
-start-api = "azuraforge_api.main:run_server"
+# === KALDIRILDI: Bu bölüm artık docker-compose tarafından yönetiliyor ===
+# [project.scripts]
+# start-api = "azuraforge_api.main:run_server"
 
 [project.urls]
 "Homepage" = "https://github.com/AzuraForge/api"
