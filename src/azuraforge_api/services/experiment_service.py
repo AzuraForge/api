@@ -17,8 +17,10 @@ import pandas as pd
 import numpy as np
 
 from azuraforge_dbmodels import Experiment, get_session_local
-from azuraforge_learner import Learner, Sequential, TimeSeriesPipeline # <-- TimeSeriesPipeline EKLENDİ
+from azuraforge_learner import Learner, Sequential
+from azuraforge_learner.pipelines import TimeSeriesPipeline
 from ..core.exceptions import AzuraForgeException, ExperimentNotFoundException, PipelineNotFoundException, ConfigNotFoundException
+
 # --- Veritabanı & Celery Kurulumu ---
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL: raise ValueError("API: DATABASE_URL ortam değişkeni ayarlanmamış!")
