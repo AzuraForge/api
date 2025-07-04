@@ -2,6 +2,7 @@
 FROM python:3.10-slim-bullseye
 
 # Gerekli sistem paketlerini kur
+# DİKKAT: Artık 'nc' (netcat) kurmamıza gerek yok.
 RUN apt-get update && \
     apt-get install -y git --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
@@ -9,14 +10,17 @@ RUN apt-get update && \
 # Çalışma dizinini ayarla
 WORKDIR /app
 
-# === BASİT VE GARANTİ YÖNTEM ===
+# === YENİ ADIM: Bekleme scriptini kopyala ve çalıştırılabilir yap ===
+COPY ./scripts/wait-for-it.sh /usr/local/bin/wait-for-it.sh
+RUN chmod +x /usr/local/bin/wait-for-it.sh
+# === YENİ ADIM SONU ===
+
 # Önce projenin TÜM dosyalarını kopyala
 COPY . .
 
 # Şimdi, tüm dosyalar içerideyken, tek bir komutla her şeyi kur.
-# -e modu sayesinde scriptler PATH'e eklenir ve bağımlılıklar çözülür.
 RUN pip install --no-cache-dir -e .[dev]
-# === BİTTİ ===
 
 # Konteyner başlatıldığında çalıştırılacak komut
-CMD ["start-api"]
+# Artık docker-compose.yml tarafından yönetiliyor, bu satır sadece referans.
+CMD ["uvicorn", "azuraforge_api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
