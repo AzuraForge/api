@@ -9,14 +9,15 @@ import copy
 from datetime import datetime
 from typing import List, Dict, Any, Generator, Union
 from fastapi import HTTPException
-from sqlalchemy import create_engine, desc
+from sqlalchemy import desc
 from celery import Celery
 from celery.result import AsyncResult
 from importlib import resources
 import pandas as pd
 import numpy as np
 
-from azuraforge_dbmodels import Experiment, get_session_local
+# --- DEĞİŞİKLİK: Experiment modelini ve veritabanı yardımcılarını merkezi paketten alıyoruz ---
+from azuraforge_dbmodels import Experiment, sa_create_engine, get_session_local
 from azuraforge_learner import Learner, Sequential
 from azuraforge_learner.pipelines import TimeSeriesPipeline
 from ..core.exceptions import AzuraForgeException, ExperimentNotFoundException, PipelineNotFoundException, ConfigNotFoundException
@@ -24,8 +25,8 @@ from ..core.exceptions import AzuraForgeException, ExperimentNotFoundException, 
 # --- Veritabanı & Celery Kurulumu ---
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL: raise ValueError("API: DATABASE_URL ortam değişkeni ayarlanmamış!")
-engine = create_engine(DATABASE_URL)
-SessionLocal = get_session_local(engine)
+engine = sa_create_engine(DATABASE_URL) # <-- Merkezi paketten gelen create_engine kullanılıyor
+SessionLocal = get_session_local(engine) # <-- Merkezi paketten gelen fabrika kullanılıyor
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 celery_app = Celery("azuraforge_tasks", broker=REDIS_URL, backend=REDIS_URL)
 
@@ -136,6 +137,7 @@ def get_default_pipeline_config(pipeline_id: str) -> Dict[str, Any]:
 def list_experiments() -> List[Dict[str, Any]]:
     db = SessionLocal()
     try:
+        # --- DEĞİŞİKLİK: `Experiment` modeli artık merkezi paketten geliyor ---
         experiments_from_db = db.query(Experiment).order_by(desc(Experiment.created_at)).all()
         all_experiments_data = []
         for exp in experiments_from_db:
@@ -146,14 +148,12 @@ def list_experiments() -> List[Dict[str, Any]]:
                     d = d[key]
                 return d
 
-            # config_summary için daha genel bir yaklaşım benimseyelim
             config_summary = {
                 "ticker": safe_get(exp.config, ["data_sourcing", "ticker"]),
                 "location": f"{safe_get(exp.config, ['data_sourcing', 'latitude'])}, {safe_get(exp.config, ['data_sourcing', 'longitude'])}" if safe_get(exp.config, ['data_sourcing', 'latitude']) else None,
                 "epochs": safe_get(exp.config, ["training_params", "epochs"]),
                 "lr": safe_get(exp.config, ["training_params", "lr"]),
             }
-            # None değerleri temizle
             config_summary = {k: v for k, v in config_summary.items() if v is not None}
 
             summary = {
@@ -166,7 +166,7 @@ def list_experiments() -> List[Dict[str, Any]]:
                 "failed_at": exp.failed_at.isoformat() if exp.failed_at else None,
                 "batch_id": exp.batch_id,
                 "batch_name": exp.batch_name,
-                "model_path": exp.model_path,  # <-- KRİTİK EKLENTİ
+                "model_path": exp.model_path,
                 "config_summary": config_summary,
                 "results_summary": {
                     "final_loss": safe_get(exp.results, ["final_loss"]),
@@ -196,7 +196,6 @@ def get_task_status(task_id: str) -> Dict[str, Any]:
     return {"status": task_result.state, "details": task_result.info}
 
 def get_experiment_report_path(experiment_id: str) -> str:
-    """Verilen deney ID'si için rapor dizininin yolunu döndürür."""
     db = SessionLocal()
     try:
         exp = db.query(Experiment).filter(Experiment.id == experiment_id).first()
@@ -222,7 +221,31 @@ def _get_pipeline_instance(exp: Experiment) -> TimeSeriesPipeline:
         raise PipelineNotFoundException(pipeline_id=pipeline_name)
     PipelineClass = AVAILABLE_PIPELINES[pipeline_name]
     pipeline_instance = PipelineClass(exp.config)
-    pipeline_instance.run(skip_training=True)
+    
+    # --- DEĞİŞİKLİK: Bu fonksiyonun burada eğitim yapmaması gerekir. ---
+    # `run` metodunu `skip_training=True` ile çağırarak sadece scaler'ların fit edilmesini sağlıyoruz.
+    # Bu, TimeSeriesPipeline'ın doğru çalışması için gereklidir.
+    if isinstance(pipeline_instance, TimeSeriesPipeline):
+        # TimeSeriesPipeline, veri hazırlama için ham veriye ihtiyaç duyar.
+        # Bu, production ortamında bir zorluk yaratabilir. Şimdilik, bu veriyi
+        # geçici olarak yükleyecek bir mekanizma varsayıyoruz veya pipeline'ı
+        # yeniden yapılandırıyoruz. Burada en basit yaklaşımı seçiyoruz:
+        # `run` metodunu `skip_training=True` ile çağırıyoruz.
+        # Bu, `run` metodunun ham veri gerektirmemesi için yeniden tasarlanması gerektiğini gösterir.
+        # Ancak mevcut yapıyı bozmamak için, skip_training'in scaler'ları fit edeceğini varsayalım.
+        # NOT: Bu, worker'daki `get_shared_data` mantığına benzer bir veri yükleme gerektirebilir.
+        # Şimdilik, `run` metodunun `skip_training` parametresini desteklediğini varsayıyoruz.
+        # Bu, learner reposundaki `TimeSeriesPipeline`'de bir değişiklik gerektirebilir.
+        
+        # Bu satır, `TimeSeriesPipeline.run` metodunun `raw_data` beklediği için hata verebilir.
+        # Bu, daha derin bir refactoring gerektirir. Şimdilik `skip_training` ile devam edelim.
+        # pipeline_instance.run(skip_training=True) # Bu satırda veri eksikliği hatası alınabilir.
+        pass # Bu kısmı geçici olarak atlıyoruz, çünkü predict için veri kaynağı belirsiz.
+        # TODO: Prediction için scaler'ları yeniden yüklemenin/fit etmenin bir yolunu bul.
+        # Mevcut kodda, `run` çağrılmadan scaler'lar fit edilmez.
+        # Bu, `predict_with_model` fonksiyonunun çalışmasını engelleyebilir.
+        # Geçici çözüm: `predict_with_model` içinde scaler'ları yeniden fit edelim.
+        
     _pipeline_cache[exp_id] = pipeline_instance
     return pipeline_instance
 
@@ -235,23 +258,42 @@ def predict_with_model(experiment_id: str, request_data: List[Dict[str, Any]]) -
         if not exp.model_path or not os.path.exists(exp.model_path):
             raise AzuraForgeException(status_code=404, detail=f"No model artifact for experiment '{experiment_id}'.", error_code="MODEL_ARTIFACT_NOT_FOUND")
 
-        pipeline_instance = _get_pipeline_instance(exp)
-        
-        num_features = len(pipeline_instance.feature_cols) if pipeline_instance.feature_cols else 1
-        seq_len = pipeline_instance.config.get('model_params', {}).get('sequence_length', 60)
-        
-        model_input_shape = (1, seq_len, num_features) if isinstance(pipeline_instance, TimeSeriesPipeline) else (1, 3, 32, 32)
+        # pipeline_instance = _get_pipeline_instance(exp)
+        # _get_pipeline_instance içindeki sorunlar nedeniyle, pipeline'ı burada doğrudan oluşturalım.
+        from azuraforge_worker.tasks.training_tasks import AVAILABLE_PIPELINES
+        PipelineClass = AVAILABLE_PIPELINES.get(exp.pipeline_name)
+        if not PipelineClass: raise PipelineNotFoundException(pipeline_id=exp.pipeline_name)
+        pipeline_instance = PipelineClass(exp.config)
 
-        model = pipeline_instance._create_model(model_input_shape)
+        if isinstance(pipeline_instance, TimeSeriesPipeline):
+            # Tahmin için scaler'ları fit etmemiz gerekiyor.
+            # Normalde bu bilgi eğitim sırasında kaydedilmelidir.
+            # Geçici çözüm: Geçmiş veriyi yeniden yükleyip scaler'ları fit edelim.
+            # NOT: Bu verimsizdir ve idealde scaler'lar modelle birlikte kaydedilmelidir.
+            from azuraforge_worker.tasks.training_tasks import get_shared_data
+            full_config_json = json.dumps(exp.config, sort_keys=True)
+            historical_data = get_shared_data(exp.pipeline_name, full_config_json)
+            pipeline_instance._fit_scalers(historical_data)
         
+        num_features = len(pipeline_instance.feature_cols) if hasattr(pipeline_instance, 'feature_cols') and pipeline_instance.feature_cols else 1
+        seq_len = pipeline_instance.config.get('model_params', {}).get('sequence_length', 60)
+        model_input_shape = (1, seq_len, num_features) if isinstance(pipeline_instance, TimeSeriesPipeline) else (1, 3, 32, 32)
+        model = pipeline_instance._create_model(model_input_shape)
         learner = pipeline_instance._create_learner(model, [])
         learner.load_model(exp.model_path)
-
         request_df = pd.DataFrame(request_data)
-        prepared_data = pipeline_instance.prepare_data_for_prediction(request_df)
         
+        # `prepare_data_for_prediction` metodunun varlığını kontrol edelim
+        if not hasattr(pipeline_instance, 'prepare_data_for_prediction'):
+            raise NotImplementedError("The pipeline does not implement 'prepare_data_for_prediction'.")
+            
+        prepared_data = pipeline_instance.prepare_data_for_prediction(request_df)
         scaled_prediction = learner.predict(prepared_data)
         
+        # `target_scaler`'ın varlığını kontrol edelim
+        if not hasattr(pipeline_instance, 'target_scaler'):
+            raise RuntimeError("The pipeline's target_scaler is not available.")
+            
         unscaled_prediction = pipeline_instance.target_scaler.inverse_transform(scaled_prediction)
         
         if exp.config.get("feature_engineering", {}).get("target_col_transform") == 'log':

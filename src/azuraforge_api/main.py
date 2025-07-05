@@ -1,19 +1,21 @@
 # api/src/azuraforge_api/main.py
 
-# uvicorn'u artık buradan import etmeye gerek yok
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from .core.config import settings
 from .routes import experiments, pipelines, streaming, auth
-from azuraforge_dbmodels import init_db
 from .services import user_service
 from .database import SessionLocal
+
+# --- DEĞİŞİKLİK: init_db fonksiyonunu merkezi paketten import ediyoruz ---
+from azuraforge_dbmodels import init_db
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("API: Veritabanı tabloları kontrol ediliyor/oluşturuluyor...")
+    # --- DEĞİŞİKLİK: Merkezi init_db fonksiyonu çağrılıyor ---
     init_db()
     print("API: Veritabanı hazır.")
     
@@ -63,8 +65,3 @@ def create_app() -> FastAPI:
     return app
 
 app = create_app()
-
-# === KALDIRILDI: Bu fonksiyon artık docker-compose command tarafından doğrudan çağrıldığı için gereksiz ===
-# def run_server():
-#     print(f"🚀 Starting {settings.PROJECT_NAME}...")
-#     uvicorn.run("azuraforge_api.main:app", host="0.0.0.0", port=8000, reload=True)

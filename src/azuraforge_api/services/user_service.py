@@ -4,8 +4,9 @@ from sqlalchemy.orm import Session
 from azuraforge_dbmodels import User
 from ..schemas import UserCreate
 from ..core.password import get_password_hash, verify_password
-# DİKKAT: BU SATIR GÖZDEN KAÇMIŞTI, SİLİYORUZ
-# from .config import settings
+
+# --- DEĞİŞİKLİK: Kullanılmayan import kaldırıldı ---
+# from .config import settings 
 
 def get_user_by_username(db: Session, username: str) -> User | None:
     """Verilen kullanıcı adına göre kullanıcıyı bulur."""
