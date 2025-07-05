@@ -30,9 +30,6 @@ dependencies = [
     "python-multipart"
 ]
 
-# === KALDIRILDI: Bu bölüm artık docker-compose tarafından yönetiliyor ===
-# [project.scripts]
-# start-api = "azuraforge_api.main:run_server"
 [project.urls]
 "Homepage" = "https://github.com/AzuraForge/api"
 
@@ -41,10 +38,15 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "httpx",
+    "flake8" # <-- YENİ
 ]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# YENİ: test dosyalarını nerede arayacağını belirtiyoruz
+testpaths = [
+    "tests",
+]
 
 [tool.semantic_release]
 branch = "main"
