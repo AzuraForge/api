@@ -175,7 +175,9 @@ def list_experiments() -> List[Dict[str, Any]]:
                     "accuracy": safe_get(exp.results, ["metrics", "accuracy"])
                 },
                 "config": exp.config,
+                # === DÜZELTME BAŞLANGICI: Yanlış atama düzeltildi ===
                 "results": exp.results,
+                # === DÜZELTME SONU ===
                 "error": exp.error
             }
             all_experiments_data.append(summary)
