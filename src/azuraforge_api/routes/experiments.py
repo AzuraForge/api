@@ -27,7 +27,6 @@ def read_experiment_details(experiment_id: str, current_user: User = Depends(sec
     except AzuraForgeException as e:
         raise e
 
-# === YENİ ENDPOINT BAŞLANGICI ===
 @router.get("/experiments/{experiment_id}/report/content")
 def get_experiment_report_content(experiment_id: str, current_user: User = Depends(security.get_current_user)):
     """Bir deneyin Markdown rapor dosyasının içeriğini döndürür."""
@@ -56,9 +55,9 @@ def get_experiment_report_image(experiment_id: str, image_name: str, current_use
         return FileResponse(image_path)
     except AzuraForgeException as e:
         raise e
-# === YENİ ENDPOINT SONU ===
 
-@router.post("/{experiment_id}/predict", response_model=PredictionResponse)
+# === DEĞİŞİKLİK BURADA: Endpoint yolunu tutarlı hale getiriyoruz ===
+@router.post("/experiments/{experiment_id}/predict", response_model=PredictionResponse)
 def predict_from_experiment(experiment_id: str, request: PredictionRequest, current_user: User = Depends(security.get_current_user)):
     try:
         return experiment_service.predict_with_model(experiment_id, request.data)
