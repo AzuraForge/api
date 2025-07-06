@@ -28,8 +28,6 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 celery_app = Celery("azuraforge_tasks", broker=REDIS_URL, backend=REDIS_URL)
 
 REDIS_PIPELINES_KEY = "azuraforge:pipelines_catalog"
-_pipeline_cache: Dict[str, Any] = {}
-_model_cache: Dict[str, Learner] = {}
 
 def get_pipelines_from_redis() -> List[Dict[str, Any]]:
     try:
@@ -85,12 +83,14 @@ def _generate_config_combinations(config: Dict[str, Any]) -> Generator[Dict[str,
 
 def start_experiment(config: Dict[str, Any]) -> Dict[str, Any]:
     task_ids, batch_name = [], config.pop("batch_name", f"Batch-{datetime.now().strftime('%Y%m%d-%H%M%S')}")
-    combinations, num_combinations = list(_generate_config_combinations(config)), len(list(_generate_config_combinations(config)))
+    combinations = list(_generate_config_combinations(config))
+    num_combinations = len(combinations)
     batch_id = str(uuid.uuid4()) if num_combinations > 1 else None
     batch_name = batch_name if num_combinations > 1 else None
     for single_config in combinations:
         single_config.update({'batch_id': batch_id, 'batch_name': batch_name})
-        task = celery_app.send_task("start_training_pipeline", args=[single_config]); task_ids.append(task.id)
+        task = celery_app.send_task("start_training_pipeline", args=[single_config])
+        task_ids.append(task.id)
     if num_combinations > 1: return {"message": f"{num_combinations} experiments submitted as batch '{batch_name}'.", "batch_id": batch_id, "task_ids": task_ids}
     else: return {"message": "Experiment submitted to worker.", "task_id": task_ids[0]}
 
@@ -176,25 +176,15 @@ def get_experiment_report_path(experiment_id: str) -> str:
     finally: db.close()
 
 async def predict_with_model(experiment_id: str, request_data: Optional[List[Dict[str, Any]]]) -> Dict[str, Any]:
-    """
-    Worker'a bir tahmin görevi gönderir ve sonucunu bekler.
-    """
     try:
-        # Worker'da tanımladığımız yeni görevi çağırıyoruz.
         task = celery_app.send_task(
             "predict_from_model_task",
             args=[experiment_id, request_data]
         )
-        
-        # task.get() senkron (blocking) bir çağrıdır. FastAPI'nin ana event
-        # döngüsünü bloklamamak için bunu bir thread içinde çalıştırıyoruz.
         result = await asyncio.to_thread(task.get, timeout=60)
         return result
-
     except Exception as e:
-        # Celery'den veya worker'dan gelen hataları yakala ve HTTP hatasına çevir
-        # Celery'nin fırlattığı hataların detayları genellikle e.args içinde bulunur.
-        error_message = f"Prediction task failed: {str(e)}"
+        error_message = f"Prediction task failed: {getattr(e, 'message', str(e))}"
         print(f"API Error during prediction task: {error_message}")
         raise AzuraForgeException(
             status_code=500,
