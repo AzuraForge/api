@@ -56,11 +56,10 @@ def get_experiment_report_image(experiment_id: str, image_name: str, current_use
     except AzuraForgeException as e:
         raise e
 
-# === DEĞİŞİKLİK BURADA: Endpoint yolunu tutarlı hale getiriyoruz ===
 @router.post("/experiments/{experiment_id}/predict", response_model=PredictionResponse)
-def predict_from_experiment(experiment_id: str, request: PredictionRequest, current_user: User = Depends(security.get_current_user)):
+async def predict_from_experiment(experiment_id: str, request: PredictionRequest, current_user: User = Depends(security.get_current_user)):
     try:
-        return experiment_service.predict_with_model(experiment_id, request.data)
+        return await experiment_service.predict_with_model(experiment_id, request.data)
     except AzuraForgeException as e:
         raise e
     except Exception as e:
