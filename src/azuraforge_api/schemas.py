@@ -32,7 +32,9 @@ class PredictionRequest(BaseModel):
     """
     # Örnek: {"Date": ["2023-01-01"], "Close": [150.0], "Volume": [10000]}
     # Not: Sütun isimleri ve veri tipleri, pipeline'ın beklediği ile eşleşmelidir.
-    data: List[Dict[str, Any]]
+    # === DEĞİŞİKLİK BURADA: 'data' alanı artık isteğe bağlı (Optional) ===
+    data: Optional[List[Dict[str, Any]]] = None
+
 
 class PredictionResponse(BaseModel):
     """Tahmin yanıtı için veri yapısı."""

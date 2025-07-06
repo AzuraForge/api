@@ -7,7 +7,7 @@ import os
 import redis
 import copy
 from datetime import datetime
-from typing import List, Dict, Any, Generator, Union
+from typing import List, Dict, Any, Generator, Union, Optional
 from fastapi import HTTPException
 from sqlalchemy import desc
 from celery import Celery
@@ -113,6 +113,7 @@ def get_default_pipeline_config(pipeline_id: str) -> Dict[str, Any]:
     return pipeline_info
 
 def list_experiments() -> List[Dict[str, Any]]:
+    # ... (Bu fonksiyonun içeriği aynı kalıyor, değişiklik yok) ...
     db = SessionLocal()
     try:
         experiments_from_db = db.query(Experiment).order_by(desc(Experiment.created_at)).all()
@@ -133,18 +134,12 @@ def list_experiments() -> List[Dict[str, Any]]:
             }
             config_summary = {k: v for k, v in config_summary.items() if v is not None}
 
-            # === DEĞİŞİKLİK BURADA: `results` anahtarını ekliyoruz ===
             summary = {
-                "experiment_id": exp.id,
-                "task_id": exp.task_id,
-                "pipeline_name": exp.pipeline_name,
-                "status": exp.status,
-                "created_at": exp.created_at.isoformat() if exp.created_at else None,
+                "experiment_id": exp.id, "task_id": exp.task_id, "pipeline_name": exp.pipeline_name,
+                "status": exp.status, "created_at": exp.created_at.isoformat() if exp.created_at else None,
                 "completed_at": exp.completed_at.isoformat() if exp.completed_at else None,
                 "failed_at": exp.failed_at.isoformat() if exp.failed_at else None,
-                "batch_id": exp.batch_id,
-                "batch_name": exp.batch_name,
-                "model_path": exp.model_path,
+                "batch_id": exp.batch_id, "batch_name": exp.batch_name, "model_path": exp.model_path,
                 "config_summary": config_summary,
                 "results_summary": {
                     "final_loss": safe_get(exp.results, ["final_loss"]),
@@ -152,9 +147,7 @@ def list_experiments() -> List[Dict[str, Any]]:
                     "mae": safe_get(exp.results, ["metrics", "mae"]),
                     "accuracy": safe_get(exp.results, ["metrics", "accuracy"])
                 },
-                "config": exp.config,
-                "results": exp.results,  # <-- EKSİK OLAN ANAHTAR EKLENDİ!
-                "error": exp.error
+                "config": exp.config, "results": exp.results, "error": exp.error
             }
             all_experiments_data.append(summary)
         return all_experiments_data
@@ -186,35 +179,72 @@ def get_experiment_report_path(experiment_id: str) -> str:
         return report_dir
     finally: db.close()
 
-def predict_with_model(experiment_id: str, request_data: List[Dict[str, Any]]) -> Dict[str, Any]:
-    # ... (Bu fonksiyonun içeriği aynı kalıyor, değişiklik yok) ...
+# === DEĞİŞİKLİK BURADA BAŞLIYOR ===
+def predict_with_model(experiment_id: str, request_data: Optional[List[Dict[str, Any]]]) -> Dict[str, Any]:
     db = SessionLocal()
     try:
         exp = db.query(Experiment).filter(Experiment.id == experiment_id).first()
         if not exp: raise ExperimentNotFoundException(experiment_id=experiment_id)
         if not exp.model_path or not os.path.exists(exp.model_path): raise AzuraForgeException(status_code=404, detail=f"No model artifact for experiment '{experiment_id}'.", error_code="MODEL_ARTIFACT_NOT_FOUND")
+        
         from azuraforge_worker.tasks.training_tasks import AVAILABLE_PIPELINES
         PipelineClass = AVAILABLE_PIPELINES.get(exp.pipeline_name)
         if not PipelineClass: raise PipelineNotFoundException(pipeline_id=exp.pipeline_name)
+        
         pipeline_instance = PipelineClass(exp.config)
-        if isinstance(pipeline_instance, TimeSeriesPipeline):
+        is_timeseries = isinstance(pipeline_instance, TimeSeriesPipeline)
+
+        # Scaler'ların eğitim verisine göre fit edilmesi gerekiyor
+        if is_timeseries:
             from azuraforge_worker.tasks.training_tasks import get_shared_data
             full_config_json = json.dumps(exp.config, sort_keys=True)
             historical_data = get_shared_data(exp.pipeline_name, full_config_json)
             pipeline_instance._fit_scalers(historical_data)
+
+        # Modelin beklediği girdi şeklini hazırla
         num_features = len(exp.results.get('feature_cols', [])) if exp.results else 1
         seq_len = exp.config.get('model_params', {}).get('sequence_length', 60)
-        model_input_shape = (1, seq_len, num_features) if isinstance(pipeline_instance, TimeSeriesPipeline) else (1, 3, 32, 32)
+        model_input_shape = (1, seq_len, num_features) if is_timeseries else (1, 3, 32, 32)
         model = pipeline_instance._create_model(model_input_shape)
         learner = pipeline_instance._create_learner(model, [])
         learner.load_model(exp.model_path)
-        request_df = pd.DataFrame(request_data)
+
+        # Tahmin için kullanılacak veriyi belirle
+        request_df = None
+        if request_data:
+            # Durum 1: Kullanıcı özel veri sağladı
+            request_df = pd.DataFrame(request_data)
+        elif is_timeseries:
+            # Durum 2: Kullanıcı veri sağlamadı, zaman serisi için son veriyi kullan
+            if 'historical_data' not in locals(): # Eğer daha önce yüklenmediyse tekrar yükle
+                from azuraforge_worker.tasks.training_tasks import get_shared_data
+                full_config_json = json.dumps(exp.config, sort_keys=True)
+                historical_data = get_shared_data(exp.pipeline_name, full_config_json)
+            
+            if len(historical_data) < seq_len:
+                raise AzuraForgeException(status_code=400, detail=f"Not enough historical data ({len(historical_data)}) to form a sequence of length {seq_len}.", error_code="INSUFFICIENT_DATA")
+            
+            request_df = historical_data.tail(seq_len)
+        else:
+            # Durum 3: Veri yok ve zaman serisi değil, hata ver
+            raise AzuraForgeException(status_code=400, detail="Prediction data is required for non-time-series models.", error_code="PREDICTION_DATA_REQUIRED")
+        
+        # Veriyi tahmin için hazırla ve tahmini yap
         if not hasattr(pipeline_instance, 'prepare_data_for_prediction'): raise NotImplementedError("The pipeline does not implement 'prepare_data_for_prediction'.")
+        
         prepared_data = pipeline_instance.prepare_data_for_prediction(request_df)
         scaled_prediction = learner.predict(prepared_data)
+        
         if not hasattr(pipeline_instance, 'target_scaler'): raise RuntimeError("The pipeline's target_scaler is not available.")
+        
         unscaled_prediction = pipeline_instance.target_scaler.inverse_transform(scaled_prediction)
-        if exp.config.get("feature_engineering", {}).get("target_col_transform") == 'log': final_prediction = np.expm1(unscaled_prediction)
-        else: final_prediction = unscaled_prediction
+        
+        if exp.config.get("feature_engineering", {}).get("target_col_transform") == 'log':
+            final_prediction = np.expm1(unscaled_prediction)
+        else:
+            final_prediction = unscaled_prediction
+            
         return {"prediction": final_prediction.flatten()[0], "experiment_id": experiment_id}
-    finally: db.close()
+    finally:
+        db.close()
+# === DEĞİŞİKLİK BURADA BİTİYOR ===
