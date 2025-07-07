@@ -6,21 +6,24 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-# Önce sadece bağımlılık tanımlarını kopyala
-COPY pyproject.toml setup.py ./
-
-# Bağımlılıkları kur. Bu katman sadece toml/setup değiştiğinde yeniden çalışır.
-# .[dev] ile geliştirme bağımlılıklarını da kuruyoruz.
-RUN pip install --no-cache-dir -e .[dev]
-
-# Şimdi geri kalan tüm kodları ve scriptleri kopyala
-COPY . .
-
 # Başlangıç script'lerini kopyala ve çalıştırılabilir yap
-# Bu scriptler artık /app içinde olacak.
 COPY ./scripts/wait-for-it.sh /usr/local/bin/wait-for-it.sh
 COPY ./scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/wait-for-it.sh /usr/local/bin/entrypoint.sh
+
+# === YENİ VE DOĞRU YAPI ===
+# 1. Önce kaynak kodunu ve bağımlılık dosyalarını kopyala
+COPY src ./src
+COPY pyproject.toml setup.py ./
+
+# 2. Şimdi bağımlılıkları kur. pip artık 'src' klasörünü bulabilir.
+# Bu katman, sadece pyproject.toml veya setup.py değiştiğinde yeniden çalışır.
+RUN pip install --no-cache-dir -e .[dev]
+
+# 3. Geliştirme sırasında anında yansıma için geri kalan her şeyi kopyala
+# (Dockerfile'lar, .env.example vs. gibi dosyalar)
+COPY . .
+# === YAPI SONU ===
 
 # Konteynerin giriş noktası
 ENTRYPOINT ["entrypoint.sh"]
