@@ -120,24 +120,23 @@ def get_experiment_report_path(experiment_id: str) -> str:
         return report_dir
     finally: db.close()
 
-async def predict_with_model(experiment_id: str, request_data: Optional[List[Dict[str, Any]]]) -> Dict[str, Any]:
+async def predict_with_model(experiment_id: str, request_data: Optional[List[Dict[str, Any]]], prediction_steps: Optional[int]) -> Dict[str, Any]:
     """
     Worker'a bir tahmin görevi gönderir ve sonucunu bekler.
+    prediction_steps ek parametresi iletilir.
     """
     task = None
     try:
         task = celery_app.send_task(
             "predict_from_model_task",
-            args=[experiment_id, request_data]
+            args=[experiment_id, request_data, prediction_steps] # prediction_steps eklendi
         )
         result = await asyncio.to_thread(task.get, timeout=60)
         return result
 
     except Exception as e:
-        # === DEĞİŞİKLİK BURADA: Daha detaylı hata yakalama ===
         error_message = f"Prediction task failed: {str(e)}"
         if task and task.failed():
-             # Celery result backend'inden gelen asıl hatayı al
              original_exception = task.result
              error_message = f"Prediction task failed: {str(original_exception)}"
 
