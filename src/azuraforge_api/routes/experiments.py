@@ -5,8 +5,8 @@ from fastapi.responses import FileResponse, Response
 from typing import List, Dict, Any
 
 from ..services import experiment_service
-from ..schemas import PredictionRequest, PredictionResponse
-from ..core.exceptions import AzuraForgeException, ExperimentNotFoundException
+from ..schemas import PredictionRequest
+from ..core.exceptions import AzuraForgeException
 from ..core import security
 from azuraforge_dbmodels import User
 
@@ -56,9 +56,14 @@ def get_experiment_report_image(experiment_id: str, image_name: str, current_use
     except AzuraForgeException as e:
         raise e
 
-@router.post("/experiments/{experiment_id}/predict", response_model=PredictionResponse)
+# === DEĞİŞİKLİK BURADA: response_model genişletildi ===
+# Artık sadece `prediction` ve `experiment_id` değil, worker'dan gelen
+# `history` ve `target_col` gibi tüm anahtarları içeren bir sözlük dönebilir.
+@router.post("/experiments/{experiment_id}/predict", response_model=Dict[str, Any])
 async def predict_from_experiment(experiment_id: str, request: PredictionRequest, current_user: User = Depends(security.get_current_user)):
     try:
+        # Servis katmanı zaten worker'dan gelen tam sözlüğü döndürüyor.
+        # Değişiklik sadece yukarıdaki response_model tanımındadır.
         return await experiment_service.predict_with_model(experiment_id, request.data)
     except AzuraForgeException as e:
         raise e
