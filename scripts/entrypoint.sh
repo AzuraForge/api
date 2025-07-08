@@ -1,4 +1,3 @@
-# ========== DOSYA: api/scripts/entrypoint.sh ==========
 #!/bin/sh
 set -e
 

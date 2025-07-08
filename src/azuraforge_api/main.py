@@ -9,15 +9,15 @@ from .routes import experiments, pipelines, streaming, auth
 from .services import user_service
 from .database import SessionLocal
 
-# --- DEĞİŞİKLİK: init_db fonksiyonunu merkezi paketten import ediyoruz ---
-# from azuraforge_dbmodels import init_db # <-- BU SATIRI SİLİN
+# --- DEĞİŞİKLİK: init_db fonksiyonunu merkezi paketten import etmiyoruz. ---
+# from azuraforge_dbmodels import init_db # <-- BU SATIR SİLİNDİ
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("API: Veritabanı tabloları kontrol ediliyor/oluşturuluyor...")
-    # Bu bloktaki init_db çağrısını ve logları siliyoruz.
-    # init_db() # <-- BU SATIRI SİLİN
-    print("API: Veritabanı hazır.")
+    # --- DEĞİŞİKLİK: init_db() çağrısı buradan kaldırıldı. ---
+    # Bu görev artık api/scripts/entrypoint.sh tarafından `alembic` ile yapılıyor.
+    # Bu, API başlamadan *önce* veritabanı şemasının güncel olmasını garanti eder.
+    print("API: Veritabanı şemasının başlangıç script'i tarafından yönetildiği varsayılıyor.")
     
     db = SessionLocal()
     try:
