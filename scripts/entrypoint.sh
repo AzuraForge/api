@@ -32,9 +32,18 @@ if [ -n "$POSTGRES_HOST" ]; then
     wait-for-it.sh "${POSTGRES_HOST}:${POSTGRES_DB_PORT}" -t 60 -- echo "PostgreSQL is up."
 fi
 
-# === YENİ: ALEMİC GEÇİŞİNİ UYGULAMA ADIMI ===
+# === YENİ VE GÜNCELLENMİŞ ALEMİC ADIMI ===
 echo "API: Running database migrations to 'head'..."
-alembic upgrade head
+
+# Python kullanarak 'azuraforge_dbmodels' paketinin içindeki alembic.ini dosyasının yolunu bul.
+# Bu, yolun ortama göre değişmesinden etkilenmeyen sağlam bir yöntemdir.
+ALEMBIC_INI_PATH=$(python -c "import os, azuraforge_dbmodels; print(os.path.join(os.path.dirname(azuraforge_dbmodels.__file__), 'alembic.ini'))")
+
+echo "Found alembic.ini at: $ALEMBIC_INI_PATH"
+
+# Alembic'e -c bayrağı ile konfigürasyon dosyasının yerini açıkça belirt.
+alembic -c "$ALEMBIC_INI_PATH" upgrade head
+
 echo "API: Database migrations complete."
 # === YENİ ADIM SONU ===
 
