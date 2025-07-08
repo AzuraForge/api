@@ -1,40 +1,23 @@
+# ========== DOSYA: api/scripts/entrypoint.sh ==========
 #!/bin/sh
-# Hata durumunda script'in hemen durmasını sağlar.
 set -e
 
-# --- DEĞİŞİKLİK BURADA BAŞLIYOR ---
-# Eğer DATABASE_URL ortam değişkeni zaten dışarıdan ayarlanmışsa,
-# sır dosyalarını okuma ve kendi URL'mizi oluşturma adımlarını atla.
 if [ -z "$DATABASE_URL" ]; then
     echo "DATABASE_URL not set. Attempting to build from Docker secrets..."
-
-    # Sır dosyalarının yollarını tanımla
     POSTGRES_USER_FILE="/run/secrets/postgres_user"
     POSTGRES_PASSWORD_FILE="/run/secrets/postgres_password"
-
-    # Dosyaların var olup olmadığını kontrol et
     if [ -f "$POSTGRES_USER_FILE" ]; then
         export POSTGRES_USER=$(cat "$POSTGRES_USER_FILE")
     else
-        echo "PostgreSQL user secret not found! Cannot build DATABASE_URL."
-        # DATABASE_URL olmadan devam edemeyiz, bu yüzden hata ile çık.
-        # Ancak eğer DB_HOST ayarlı değilse, bu yerel bir çalıştırmadır, devam et.
-        if [ -n "$POSTGRES_HOST" ]; then
-            exit 1
-        fi
+        echo "PostgreSQL user secret not found!"
+        if [ -n "$POSTGRES_HOST" ]; then exit 1; fi
     fi
-
     if [ -f "$POSTGRES_PASSWORD_FILE" ]; then
         export POSTGRES_PASSWORD=$(cat "$POSTGRES_PASSWORD_FILE")
     else
-        echo "PostgreSQL password secret not found! Cannot build DATABASE_URL."
-        if [ -n "$POSTGRES_HOST" ]; then
-            exit 1
-        fi
+        echo "PostgreSQL password secret not found!"
+        if [ -n "$POSTGRES_HOST" ]; then exit 1; fi
     fi
-
-    # DATABASE_URL'i oluştur ve export et.
-    # Sadece gerekli tüm parçalar varsa birleştir.
     if [ -n "$POSTGRES_USER" ] && [ -n "$POSTGRES_PASSWORD" ] && [ -n "$POSTGRES_HOST" ]; then
         export DATABASE_URL="postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_DB_PORT}/${POSTGRES_DB}"
         echo "DATABASE_URL constructed from secrets."
@@ -44,14 +27,17 @@ if [ -z "$DATABASE_URL" ]; then
 else
     echo "DATABASE_URL is already set. Skipping secret handling."
 fi
-# --- DEĞİŞİKLİK BURADA BİTİYOR ---
 
-# Sadece POSTGRES_HOST ayarlıysa (yani bir veritabanı servisine bağlanmaya çalışıyorsak) bekle.
 if [ -n "$POSTGRES_HOST" ]; then
     echo "Waiting for PostgreSQL to be ready at ${POSTGRES_HOST}:${POSTGRES_DB_PORT}..."
     wait-for-it.sh "${POSTGRES_HOST}:${POSTGRES_DB_PORT}" -t 60 -- echo "PostgreSQL is up."
 fi
 
-# Verilen asıl komutu (CMD) çalıştır.
+# === YENİ: ALEMİC GEÇİŞİNİ UYGULAMA ADIMI ===
+echo "API: Running database migrations to 'head'..."
+alembic upgrade head
+echo "API: Database migrations complete."
+# === YENİ ADIM SONU ===
+
 echo "Starting application command: $@"
 exec "$@"

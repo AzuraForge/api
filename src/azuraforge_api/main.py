@@ -10,13 +10,13 @@ from .services import user_service
 from .database import SessionLocal
 
 # --- DEĞİŞİKLİK: init_db fonksiyonunu merkezi paketten import ediyoruz ---
-from azuraforge_dbmodels import init_db
+# from azuraforge_dbmodels import init_db # <-- BU SATIRI SİLİN
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("API: Veritabanı tabloları kontrol ediliyor/oluşturuluyor...")
-    # --- DEĞİŞİKLİK: Merkezi init_db fonksiyonu çağrılıyor ---
-    init_db()
+    # Bu bloktaki init_db çağrısını ve logları siliyoruz.
+    # init_db() # <-- BU SATIRI SİLİN
     print("API: Veritabanı hazır.")
     
     db = SessionLocal()
